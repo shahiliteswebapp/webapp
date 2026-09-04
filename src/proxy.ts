@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { googleAuthConfigured } from "@/lib/auth-config";
 
 /*
  * Optimistic auth routing (Next 16 "Proxy", formerly Middleware).
  * Only checks cookie presence — the real session check happens in
  * src/app/(app)/layout.tsx via requireSession().
+ *
+ * In Google mode only the Auth.js cookie counts (so a leftover mock cookie
+ * can't cause a redirect loop); in local mock mode only `sl_session` counts.
  */
 
-const SESSION_COOKIES = [
-  "sl_session", // local mock
-  "authjs.session-token", // Auth.js (http)
-  "__Secure-authjs.session-token", // Auth.js (https)
+const AUTHJS_COOKIES = [
+  "authjs.session-token",
+  "__Secure-authjs.session-token",
 ];
 
 export function proxy(request: NextRequest) {
@@ -22,7 +25,8 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const hasSession = SESSION_COOKIES.some((c) => request.cookies.has(c));
+  const cookieNames = googleAuthConfigured() ? AUTHJS_COOKIES : ["sl_session"];
+  const hasSession = cookieNames.some((c) => request.cookies.has(c));
 
   if (pathname === "/sign-in") {
     return hasSession
