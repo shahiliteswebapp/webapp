@@ -57,8 +57,12 @@ export const UPLOAD = {
   pdfThumbMaxPx: 1200, // downscale blueprint thumbnail embedded in the PDF
 } as const;
 
+// Quick-add chips on the room-list screen. Covers residential + commercial,
+// since the client does both.
 export const COMMON_ROOM_NAMES = [
+  // Residential
   "Living Room",
+  "Drawing Room",
   "Master Bedroom",
   "Bedroom 2",
   "Bedroom 3",
@@ -74,4 +78,17 @@ export const COMMON_ROOM_NAMES = [
   "Common Bath",
   "Utility",
   "Store",
+  // Commercial
+  "Reception",
+  "Entrance Lobby",
+  "Office",
+  "Cabin",
+  "Workstation Area",
+  "Conference Room",
+  "Meeting Room",
+  "Staff Room",
+  "Pantry",
+  "Server Room",
+  "Toilet",
+  "Corridor",
 ] as const;

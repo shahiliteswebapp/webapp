@@ -48,6 +48,9 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* safety net: nothing should scroll the page sideways ('clip' keeps
+     position: sticky working, unlike 'hidden') */
+  overflow-x: clip;
 }
 
 .font-display {

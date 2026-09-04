@@ -40,13 +40,17 @@ export interface QuotationEvent {
 
 /* ---- In-browser wizard draft (never leaves the device until "send") ---- */
 
-export interface BlueprintRef {
+export interface DraftBlueprint {
   name: string;
   kind: "pdf" | "png";
-  /** object URL or data URL for on-screen display */
-  dataUrl: string;
-  /** rendered raster preview (PNG data URL) used for the PDF + thumbnails */
-  previewDataUrl?: string;
+  /** original uploaded file, kept for reference */
+  blob: Blob;
+  /** rendered raster (PNG data URL): PDF page 1, or the PNG itself, downscaled.
+   *  Used for the on-screen viewer and later embedded in the PDF. */
+  previewDataUrl: string;
+  width: number;
+  height: number;
+  pageCount: number;
 }
 
 export interface RoomLine {
@@ -63,6 +67,7 @@ export interface DraftRoom {
 
 export interface QuoteDraft {
   createdAt: string;
-  blueprint?: BlueprintRef;
+  updatedAt: string;
+  blueprint?: DraftBlueprint;
   rooms: DraftRoom[];
 }
