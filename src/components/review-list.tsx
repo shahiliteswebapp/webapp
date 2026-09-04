@@ -57,7 +57,7 @@ function ReviewCard({ q }: { q: QuotationRecord }) {
           disabled={pending}
           className={cx(
             "inline-flex h-9 items-center rounded-full px-4 text-sm font-medium",
-            "bg-gold text-ink-deep hover:opacity-90 disabled:opacity-50",
+            "bg-gold text-paper hover:opacity-90 disabled:opacity-50",
           )}
         >
           {pending ? "Saving…" : "Approve"}

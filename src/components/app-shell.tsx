@@ -34,7 +34,7 @@ export function AppShell({
               className={cx(
                 "grid h-9 w-9 place-items-center rounded-full border text-xs font-semibold uppercase",
                 session.role === "superadmin"
-                  ? "border-gold bg-gold-tint text-gold-deep"
+                  ? "border-gold bg-gold-tint text-ink-deep"
                   : "border-hairline bg-panel text-muted",
               )}
               aria-hidden

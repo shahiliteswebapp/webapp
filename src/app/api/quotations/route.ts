@@ -97,6 +97,7 @@ export async function POST(req: Request) {
         pdf,
         grandTotal: quote.grandTotal,
         employeeName: session.name,
+        employeeEmail: session.email,
       });
       transport = r.transport;
     } catch (err) {

@@ -72,7 +72,7 @@ p, li, dt, dd, td, th {
   letter-spacing: 0.22em;
   font-size: 0.68rem;
   font-weight: 600;
-  color: var(--color-gold-deep);
+  color: var(--color-muted);
 }
 
 /* Focus ring consistent with brand */

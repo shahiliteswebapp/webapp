@@ -14,7 +14,7 @@ const buttonBase =
 // Gold is the only call-to-action color in this product; red is reserved for
 // destructive actions and rejections; everything else stays black, white, or grey.
 const buttonVariants: Record<ButtonVariant, string> = {
-  primary: "bg-gold text-ink-deep hover:opacity-90",
+  primary: "bg-gold text-paper hover:opacity-90",
   secondary:
     "border border-hairline bg-paper text-ink hover:border-gold hover:bg-gold-tint",
   ghost: "text-ink hover:bg-panel",
@@ -98,7 +98,7 @@ export function PageHeader({
 // never a status color outside black / white / gold / red.
 const statusStyles: Record<QuotationStatus, string> = {
   downloaded: "bg-panel text-muted border-hairline",
-  submitted_for_review: "bg-gold-tint text-gold-deep border-gold/40",
+  submitted_for_review: "bg-gold-tint text-ink-deep border-gold/40",
   approved: "bg-ink-deep/5 text-ink-deep border-ink-deep/20",
   rejected: "bg-rejected/10 text-rejected border-rejected/30",
 };

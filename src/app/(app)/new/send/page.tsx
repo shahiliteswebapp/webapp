@@ -141,7 +141,7 @@ export default function SendPage() {
           </ul>
         </Card>
 
-        <p className="rounded-md border border-gold/40 bg-gold-tint px-3 py-2 text-xs text-gold-deep">
+        <p className="rounded-md border border-gold/40 bg-gold-tint px-3 py-2 text-xs text-ink-deep">
           {DISCLAIMER}
         </p>
 

@@ -17,7 +17,7 @@ export function WizardSteps({ current }: { current: 1 | 2 | 3 | 4 }) {
                   "grid h-5 w-5 place-items-center rounded-full border text-[0.65rem] font-semibold",
                   state === "current" &&
                     "border-gold bg-gold text-paper",
-                  state === "done" && "border-gold-deep text-gold-deep",
+                  state === "done" && "border-gold-deep text-ink-deep",
                   state === "todo" && "border-hairline text-faint",
                 )}
               >
@@ -29,7 +29,7 @@ export function WizardSteps({ current }: { current: 1 | 2 | 3 | 4 }) {
                   state === "current"
                     ? "text-ink"
                     : state === "done"
-                      ? "text-gold-deep"
+                      ? "text-muted"
                       : "text-faint",
                 )}
               >

@@ -87,7 +87,7 @@ function SentInner() {
             (emailError ? (
               <li className="text-rejected">{emailError}</li>
             ) : transport === "smtp" ? (
-              <li>The PDF was emailed to the reviewer.</li>
+              <li>The PDF was emailed to the reviewer, and a copy to you.</li>
             ) : saved ? (
               <li>
                 Email is not set up yet. A copy is at{" "}
@@ -117,7 +117,7 @@ function SentInner() {
           </Button>
         )}
 
-        <p className="rounded-md border border-gold/40 bg-gold-tint px-3 py-2 text-xs text-gold-deep">
+        <p className="rounded-md border border-gold/40 bg-gold-tint px-3 py-2 text-xs text-ink-deep">
           {DISCLAIMER}
         </p>
       </Card>

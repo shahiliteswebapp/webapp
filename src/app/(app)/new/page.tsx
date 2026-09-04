@@ -167,7 +167,7 @@ export default function BlueprintUploadPage() {
           </div>
 
           {warn && (
-            <p className="rounded-md border border-gold/40 bg-gold-tint px-3 py-2 text-xs text-gold-deep">
+            <p className="rounded-md border border-gold/40 bg-gold-tint px-3 py-2 text-xs text-ink-deep">
               {warn}
             </p>
           )}

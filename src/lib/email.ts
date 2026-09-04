@@ -23,6 +23,7 @@ async function send(
   message: {
     subject: string;
     text: string;
+    cc?: string;
     attachments?: Array<{ filename: string; content: Buffer }>;
   },
 ): Promise<SendResult> {
@@ -41,7 +42,8 @@ async function send(
 
 /*
  * Emails the quotation PDF to the reviewer (the superadmin's real Gmail, or
- * QUOTE_RECIPIENT if set) when an employee sends it for review. Stubbed until
+ * QUOTE_RECIPIENT if set) when an employee sends it for review, and CCs the
+ * employee who generated it so both copies land automatically. Stubbed until
  * GMAIL_APP_PASSWORD is set.
  */
 export async function sendQuotationEmail(args: {
@@ -49,6 +51,7 @@ export async function sendQuotationEmail(args: {
   pdf: Buffer;
   grandTotal: number;
   employeeName: string;
+  employeeEmail: string;
 }): Promise<SendResult> {
   const { from, pass } = senderPass();
   const to = reviewerEmail();
@@ -57,10 +60,15 @@ export async function sendQuotationEmail(args: {
       "No reviewer configured (set SUPERADMIN_EMAILS or QUOTE_RECIPIENT).",
     );
   }
+  const cc =
+    args.employeeEmail.toLowerCase() !== to.toLowerCase()
+      ? args.employeeEmail
+      : undefined;
   if (!pass) return { transport: "stub", to };
 
   return send(to, from, pass, {
     subject: `Shahi Lites: Quotation ${args.number} for review`,
+    cc,
     text: [
       `Quotation ${args.number}`,
       `Prepared by: ${args.employeeName}`,
