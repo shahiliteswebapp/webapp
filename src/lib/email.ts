@@ -1,7 +1,7 @@
 import { reviewerEmail } from "./auth-config";
 import { EMAIL } from "./config";
 import { money } from "./format";
-import { STATUS_LABEL, type QuotationStatus } from "./types";
+import type { QuotationStatus } from "./types";
 
 export interface SendResult {
   transport: "smtp" | "stub";
@@ -94,17 +94,16 @@ export async function sendDecisionEmail(args: {
   const to = args.employeeEmail;
   if (!pass) return { transport: "stub", to };
 
+  const accepted = args.decision === "approved";
   return send(to, from, pass, {
-    subject: `Shahi Lites: Quotation ${args.number} ${
-      args.decision === "approved" ? "approved" : "rejected"
-    }`,
+    subject: `Shahi Lites: Quotation ${args.number} ${accepted ? "accepted" : "rejected"}`,
     text: [
       `Hi ${args.employeeName},`,
       "",
-      `Quotation ${args.number} has been ${STATUS_LABEL[
-        args.decision
-      ].toLowerCase()} by ${args.reviewerName}.`,
-      ...(args.note ? ["", `Note: ${args.note}`] : []),
+      accepted
+        ? `Congratulations! Your Quotation ${args.number} has been accepted successfully by Shahi Lites.`
+        : `Your Quotation ${args.number} has been rejected by Shahi Lites.`,
+      ...(args.note ? [`Note: ${args.note}`] : []),
       "",
       "Shahi Lites",
     ].join("\n"),
