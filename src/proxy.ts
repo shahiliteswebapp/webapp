@@ -7,11 +7,22 @@ import type { NextRequest } from "next/server";
  * src/app/(app)/layout.tsx via requireSession().
  */
 
-const COOKIE = "sl_session";
+const SESSION_COOKIES = [
+  "sl_session", // local mock
+  "authjs.session-token", // Auth.js (http)
+  "__Secure-authjs.session-token", // Auth.js (https)
+];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const hasSession = request.cookies.has(COOKIE);
+
+  // Auth.js endpoints (and other API routes, which do their own auth checks)
+  // must stay reachable while signed out.
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.next();
+  }
+
+  const hasSession = SESSION_COOKIES.some((c) => request.cookies.has(c));
 
   if (pathname === "/sign-in") {
     return hasSession

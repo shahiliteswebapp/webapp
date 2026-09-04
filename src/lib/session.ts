@@ -1,14 +1,18 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { googleAuthConfigured, roleForEmail } from "./auth-config";
 import type { Role } from "./types";
 
 /*
- * MOCK auth for local development.
+ * Session layer. Two modes, chosen automatically:
  *
- * A single httpOnly cookie holds { name, email, role }. There is no password and
- * no Google OAuth yet. When real auth is wired (Auth.js / NextAuth + Google),
- * replace the body of this file — `getSession()` is the only interface the rest
- * of the app depends on.
+ *  - Google mode (AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET / AUTH_SECRET all set):
+ *    reads the Auth.js session; role comes from MANAGER_EMAILS.
+ *  - Local mock mode (default): a single httpOnly cookie holds { name, email,
+ *    role } chosen on the mock sign-in form.
+ *
+ * `getSession` / `requireSession` / `requireManager` are the only interface the
+ * rest of the app uses — both modes return the same `Session` shape.
  */
 
 const COOKIE = "sl_session";
@@ -42,6 +46,18 @@ function decode(raw: string): Session | null {
 }
 
 export async function getSession(): Promise<Session | null> {
+  if (googleAuthConfigured()) {
+    const { auth } = await import("@/auth");
+    const s = await auth();
+    const email = s?.user?.email?.trim().toLowerCase();
+    if (!email) return null;
+    return {
+      name: s?.user?.name?.trim() || email,
+      email,
+      role: roleForEmail(email),
+    };
+  }
+
   const store = await cookies();
   const raw = store.get(COOKIE)?.value;
   return raw ? decode(raw) : null;
@@ -63,6 +79,8 @@ export async function requireManager(): Promise<Session> {
   if (session.role !== "manager") redirect("/dashboard");
   return session;
 }
+
+/* ---- mock mode only ---- */
 
 export async function setSession(s: Session): Promise<void> {
   const store = await cookies();
