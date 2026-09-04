@@ -1,9 +1,16 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ButtonLink, Card, Eyebrow } from "@/components/ui";
+import { Button, ButtonLink, Card, Eyebrow } from "@/components/ui";
 import { COMPANY, DISCLAIMER } from "@/lib/config";
+
+function base64ToBlob(b64: string, type = "application/pdf"): Blob {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type });
+}
 
 function SentInner() {
   const params = useSearchParams();
@@ -11,6 +18,32 @@ function SentInner() {
   const transport = params.get("transport");
   const saved = params.get("saved");
   const emailError = params.get("emailError");
+
+  const [pdf, setPdf] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      const key = `sl-pdf:${number}`;
+      const b64 = sessionStorage.getItem(key);
+      if (b64) {
+        setPdf(b64);
+        sessionStorage.removeItem(key); // one-time
+      }
+    } catch {
+      /* storage blocked */
+    }
+  }, [number]);
+
+  const download = () => {
+    if (!pdf) return;
+    const url = URL.createObjectURL(base64ToBlob(pdf));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${number}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
 
   return (
     <div className="mx-auto max-w-xl space-y-6">
@@ -44,14 +77,36 @@ function SentInner() {
             <li>The PDF was emailed.</li>
           ) : (
             <li>
-              Email isn&rsquo;t configured yet — the PDF was saved to{" "}
-              <code className="rounded bg-panel px-1">
-                {saved || "output/"}
-              </code>{" "}
-              on the server.
+              Email isn&rsquo;t set up yet
+              {saved ? (
+                <>
+                  {" "}
+                  — a copy is at{" "}
+                  <code className="rounded bg-panel px-1">{saved}</code> on the
+                  server, and you can download it here.
+                </>
+              ) : (
+                " — download the PDF below and keep it safe."
+              )}
             </li>
           )}
         </ul>
+
+        {pdf && (
+          <Button onClick={download} variant="secondary" className="w-full">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path
+                d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Download {number}.pdf
+          </Button>
+        )}
+
         <p className="rounded-md border border-gold/40 bg-gold-tint px-3 py-2 text-xs text-gold-deep">
           {DISCLAIMER}
         </p>

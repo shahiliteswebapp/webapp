@@ -68,9 +68,19 @@ export async function POST(req: Request) {
     );
   }
 
-  const rel = `output/${record.number}.pdf`;
-  await fs.mkdir(path.join(process.cwd(), "output"), { recursive: true });
-  await fs.writeFile(path.join(process.cwd(), rel), pdf);
+  // Local convenience only: drop a copy in ./output. Skipped on serverless
+  // (read-only FS); the PDF still reaches the client via `pdfBase64` below.
+  let savedTo: string | undefined;
+  if (!process.env.VERCEL) {
+    try {
+      const rel = `output/${record.number}.pdf`;
+      await fs.mkdir(path.join(process.cwd(), "output"), { recursive: true });
+      await fs.writeFile(path.join(process.cwd(), rel), pdf);
+      savedTo = rel;
+    } catch (err) {
+      console.error("Could not write PDF to ./output", err);
+    }
+  }
 
   let transport: "smtp" | "stub" = "stub";
   let emailError: string | undefined;
@@ -83,9 +93,10 @@ export async function POST(req: Request) {
     });
     transport = r.transport;
   } catch (err) {
-    // Quotation is still recorded and the PDF saved — surface the email issue.
+    // Quotation is still recorded — surface the email issue; the client can
+    // still download the PDF from the response.
     console.error("Email send failed", err);
-    emailError = "Email could not be sent; the PDF was saved locally.";
+    emailError = "Email could not be sent — download the PDF below and keep it safe.";
   }
 
   return NextResponse.json({
@@ -93,7 +104,9 @@ export async function POST(req: Request) {
     createdAt: record.createdAt,
     grandTotal: quote.grandTotal,
     transport,
-    savedTo: rel,
+    savedTo,
     emailError,
+    // The recipient's only copy — the client offers it as a download.
+    pdfBase64: pdf.toString("base64"),
   });
 }

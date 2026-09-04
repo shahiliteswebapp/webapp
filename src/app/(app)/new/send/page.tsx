@@ -54,6 +54,14 @@ export default function SendPage() {
         setBusy(false);
         return;
       }
+      // Hand the PDF to the confirmation page for download (too large for the URL).
+      try {
+        if (data.pdfBase64) {
+          sessionStorage.setItem(`sl-pdf:${data.number}`, data.pdfBase64);
+        }
+      } catch {
+        /* storage blocked — the confirmation page just won't offer a download */
+      }
       await discard();
       const q = new URLSearchParams({
         number: data.number,

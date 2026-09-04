@@ -38,6 +38,23 @@ export interface QuotationEvent {
   note?: string;
 }
 
+/* ---- store interface (shared by the JSON and Supabase implementations) ---- */
+
+export interface QuotationFilter {
+  employeeEmail?: string;
+  status?: QuotationStatus;
+  /** inclusive lower bound, ISO date or datetime */
+  fromISO?: string;
+  /** inclusive upper bound, ISO date or datetime */
+  toISO?: string;
+}
+
+export interface CreateQuotationInput {
+  employeeName: string;
+  employeeEmail: string;
+  totalAmount: number;
+}
+
 /* ---- In-browser wizard draft (never leaves the device until "send") ---- */
 
 export interface DraftBlueprint {

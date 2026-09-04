@@ -3,22 +3,20 @@ import path from "node:path";
 import { randomBytes, randomUUID } from "node:crypto";
 import { QUOTE } from "../config";
 import type {
+  CreateQuotationInput,
   QuotationEvent,
+  QuotationFilter,
   QuotationRecord,
   QuotationStatus,
 } from "../types";
 
 /*
- * Local JSON-file store. This is the "no database yet" implementation.
- *
- * Everything goes through this module. To move to Supabase / Postgres later,
- * write another file with the same exported functions and swap the re-export in
- * ./index.ts — no callers change.
+ * Local JSON-file store — the default "no database" implementation, selected by
+ * src/lib/store/index.ts whenever Supabase isn't configured.
  *
  * Concurrency: a single-process promise chain serialises writes, and each write
  * is atomic (temp file + rename). Fine for local dev and a one-machine demo;
- * not for serverless / multi-instance — which is exactly when you switch to a
- * real database.
+ * not for serverless / multi-instance — that's what supabaseStore.ts is for.
  */
 
 interface DB {
@@ -68,17 +66,11 @@ function formatNumber(year: number, seq: number): string {
   return `${QUOTE.numberPrefix}-${year}-${String(seq).padStart(4, "0")}`;
 }
 
-export interface QuotationFilter {
-  employeeEmail?: string;
-  status?: QuotationStatus;
-  /** inclusive lower bound, ISO date or datetime */
-  fromISO?: string;
-  /** inclusive upper bound, ISO date or datetime */
-  toISO?: string;
-}
-
 function matches(r: QuotationRecord, f: QuotationFilter): boolean {
-  if (f.employeeEmail && r.employeeEmail.toLowerCase() !== f.employeeEmail.toLowerCase()) {
+  if (
+    f.employeeEmail &&
+    r.employeeEmail.toLowerCase() !== f.employeeEmail.toLowerCase()
+  ) {
     return false;
   }
   if (f.status && r.status !== f.status) return false;
@@ -114,14 +106,8 @@ export async function listEvents(quotationId: string): Promise<QuotationEvent[]>
     .sort((a, b) => (a.at < b.at ? -1 : 1));
 }
 
-export interface CreateInput {
-  employeeName: string;
-  employeeEmail: string;
-  totalAmount: number;
-}
-
 export async function createQuotation(
-  input: CreateInput,
+  input: CreateQuotationInput,
 ): Promise<QuotationRecord> {
   return serialize(async () => {
     const db = await read();
@@ -134,7 +120,7 @@ export async function createQuotation(
       id: randomUUID(),
       number: formatNumber(year, seq),
       employeeName: input.employeeName,
-      employeeEmail: input.employeeEmail,
+      employeeEmail: input.employeeEmail.toLowerCase(),
       status: "submitted_for_review",
       totalAmount: input.totalAmount,
       createdAt: now.toISOString(),
@@ -144,7 +130,7 @@ export async function createQuotation(
       id: randomUUID(),
       quotationId: record.id,
       at: now.toISOString(),
-      actorEmail: input.employeeEmail,
+      actorEmail: record.employeeEmail,
       to: "submitted_for_review",
     });
 
@@ -163,6 +149,7 @@ export async function setStatus(
     const db = await read();
     const record = db.quotations.find((r) => r.id === id || r.number === id);
     if (!record) return null;
+    if (record.status !== "submitted_for_review") return null;
 
     const from = record.status;
     const now = new Date().toISOString();
