@@ -40,9 +40,26 @@ const DATETIME = new Intl.DateTimeFormat("en-IN", {
   hour12: true,
 });
 
+const TIME = new Intl.DateTimeFormat("en-IN", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: true,
+});
+
 export function fmtDate(iso: string | Date): string {
   const d = typeof iso === "string" ? new Date(iso) : iso;
   return Number.isNaN(d.getTime()) ? "—" : DATE.format(d);
+}
+
+export function fmtTime(iso: string | Date): string {
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  return Number.isNaN(d.getTime()) ? "—" : TIME.format(d);
+}
+
+/** Local calendar date as YYYY-MM-DD (for <input type="date"> and filters). */
+export function ymd(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 export function fmtDateTime(iso: string | Date): string {
