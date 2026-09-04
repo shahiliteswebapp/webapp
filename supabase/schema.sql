@@ -66,7 +66,7 @@ begin
   insert into public.quotation_counters (year, last_value)
     values (v_year, 1)
     on conflict (year)
-      do update set last_value = public.quotation_counters.last_value + 1
+      do update set last_value = quotation_counters.last_value + 1
     returning last_value into v_seq;
 
   v_number := 'SL-' || v_year || '-' || lpad(v_seq::text, 4, '0');
@@ -83,3 +83,6 @@ begin
   return v_row;
 end;
 $$;
+
+-- Make PostgREST pick up the new tables/function immediately.
+notify pgrst, 'reload schema';
