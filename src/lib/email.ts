@@ -1,5 +1,6 @@
 import { EMAIL } from "./config";
 import { money } from "./format";
+import { STATUS_LABEL, type QuotationStatus } from "./types";
 
 export interface SendResult {
   transport: "smtp" | "stub";
@@ -7,37 +8,54 @@ export interface SendResult {
   messageId?: string;
 }
 
-interface SendArgs {
-  number: string;
-  pdf: Buffer;
-  grandTotal: number;
-  employeeName: string;
+function config(employeeEmail?: string) {
+  return {
+    pass: process.env.GMAIL_APP_PASSWORD,
+    from: process.env.GMAIL_SENDER || EMAIL.senderEmail,
+    // Everything goes to the single fixed recipient for now; drop
+    // recipientOverride later to reach the actual employee.
+    to:
+      process.env.QUOTE_RECIPIENT ||
+      EMAIL.recipientOverride ||
+      employeeEmail ||
+      EMAIL.senderEmail,
+  };
 }
 
-/*
- * Emails the quotation PDF. Until GMAIL_APP_PASSWORD is set this is a no-op
- * ("stub") — the caller has already written the PDF to ./output. When the app
- * password is present it sends via Gmail SMTP from a single account to a single
- * fixed recipient (see src/lib/config.ts / .env.local).
- */
-export async function sendQuotationEmail(args: SendArgs): Promise<SendResult> {
-  const pass = process.env.GMAIL_APP_PASSWORD;
-  const from = process.env.GMAIL_SENDER || EMAIL.senderEmail;
-  const to = process.env.QUOTE_RECIPIENT || EMAIL.recipientOverride;
-
-  if (!pass) {
-    return { transport: "stub", to };
-  }
-
+async function send(
+  to: string,
+  from: string,
+  pass: string,
+  message: {
+    subject: string;
+    text: string;
+    attachments?: Array<{ filename: string; content: Buffer }>;
+  },
+): Promise<SendResult> {
   const nodemailer = await import("nodemailer");
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: { user: from, pass },
   });
-
   const info = await transporter.sendMail({
     from: `"${EMAIL.senderName}" <${from}>`,
     to,
+    ...message,
+  });
+  return { transport: "smtp", to, messageId: info.messageId };
+}
+
+/* Emails the quotation PDF (stub until GMAIL_APP_PASSWORD is set). */
+export async function sendQuotationEmail(args: {
+  number: string;
+  pdf: Buffer;
+  grandTotal: number;
+  employeeName: string;
+}): Promise<SendResult> {
+  const { pass, from, to } = config();
+  if (!pass) return { transport: "stub", to };
+
+  return send(to, from, pass, {
     subject: `Shahi Lites — Quotation ${args.number}`,
     text: [
       `Quotation ${args.number}`,
@@ -47,10 +65,35 @@ export async function sendQuotationEmail(args: SendArgs): Promise<SendResult> {
       "The attached PDF is the only copy of this quotation. Shahi Lites does",
       "not retain a copy of the document or its line items — please keep it safe.",
     ].join("\n"),
-    attachments: [
-      { filename: `${args.number}.pdf`, content: args.pdf },
-    ],
+    attachments: [{ filename: `${args.number}.pdf`, content: args.pdf }],
   });
+}
 
-  return { transport: "smtp", to, messageId: info.messageId };
+/* Notifies the employee that a manager approved or rejected their quotation. */
+export async function sendDecisionEmail(args: {
+  number: string;
+  decision: Exclude<QuotationStatus, "submitted_for_review">;
+  note?: string;
+  managerName: string;
+  employeeName: string;
+  employeeEmail: string;
+}): Promise<SendResult> {
+  const { pass, from, to } = config(args.employeeEmail);
+  if (!pass) return { transport: "stub", to };
+
+  return send(to, from, pass, {
+    subject: `Shahi Lites — Quotation ${args.number} ${
+      args.decision === "approved" ? "approved" : "rejected"
+    }`,
+    text: [
+      `Hi ${args.employeeName},`,
+      "",
+      `Quotation ${args.number} has been ${STATUS_LABEL[
+        args.decision
+      ].toLowerCase()} by ${args.managerName}.`,
+      ...(args.note ? ["", `Note: ${args.note}`] : []),
+      "",
+      "— Shahi Lites",
+    ].join("\n"),
+  });
 }
