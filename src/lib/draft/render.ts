@@ -115,6 +115,25 @@ async function renderPdf(file: File): Promise<RenderResult> {
   }
 }
 
+/** Re-encode a data URL at a smaller size (for the PDF thumbnail payload). */
+export async function downscaleDataUrl(
+  dataUrl: string,
+  maxPx: number,
+): Promise<string> {
+  try {
+    const img = await loadImage(dataUrl);
+    const { canvas } = drawScaled(
+      img,
+      img.naturalWidth,
+      img.naturalHeight,
+      maxPx,
+    );
+    return canvas.toDataURL("image/png");
+  } catch {
+    return dataUrl; // fall back to the original on any failure
+  }
+}
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();

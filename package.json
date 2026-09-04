@@ -11,7 +11,9 @@
     "postinstall": "npm run sync-pdf-worker"
   },
   "dependencies": {
+    "@react-pdf/renderer": "^4.9.0",
     "next": "16.3.4",
+    "nodemailer": "^10.0.0",
     "pdfjs-dist": "^6.3.289",
     "react": "19.2.8",
     "react-dom": "19.2.8"
@@ -19,6 +21,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/nodemailer": "^8.0.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
