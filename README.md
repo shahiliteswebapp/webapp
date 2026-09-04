@@ -33,7 +33,7 @@ Config that will become real client data lives in `src/lib/config.ts`
 - [x] Phase 0 — scaffold, brand tokens (Cormorant Garamond + Montserrat; white/gold/rich-black), config, types, JSON store, pricing engine
 - [x] Phase 1 — mock auth, app shell + "+" widget (Start New / History / Dashboard), dashboard
 - [x] Phase 2 — blueprint upload (PDF via pdf.js / PNG), IndexedDB draft autosave, pan/zoom viewer, editable room list
-- [ ] Phase 3 — per-room lighting selection + live cost + accessory rules
+- [x] Phase 3 — per-room lighting picker, live cost, auto connectors/drivers from rules, room switcher
 - [ ] Phase 4 — room summary cards
 - [ ] Phase 5 — PDF generation + email (stub) + send for review
 - [ ] Phase 6 — History table + CSV export (date range / day / all)
