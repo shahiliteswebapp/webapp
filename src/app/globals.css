@@ -1,26 +1,74 @@
 @import "tailwindcss";
 
+/*
+  Shahi Lites — brand tokens
+  Rich black + white + gold, weighted toward white. Light theme only (deliberate).
+  Fonts: Cormorant Garamond (thin serif display) + Montserrat (UI / body).
+*/
+@theme {
+  --font-display: var(--font-cormorant), ui-serif, Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-montserrat), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-paper: #ffffff;
+  --color-panel: #faf8f3;
+  --color-panel-2: #f4f0e6;
+  --color-ink: #121212;
+  --color-ink-deep: #0b0b0b;
+  --color-muted: #6b6b6b;
+  --color-faint: #9a9488;
+  --color-hairline: #e8e3d8;
+
+  --color-gold: #c6a15b;
+  --color-gold-deep: #8a6a2b;
+  --color-gold-tint: #f6efdd;
+
+  --color-approved: #3e7c59;
+  --color-rejected: #a23b3b;
+  --color-pending: #b8912f;
+
+  --radius-card: 14px;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  border-color: var(--color-hairline);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 300;
+  letter-spacing: 0.01em;
+}
+
+/* Thin, wide section label */
+.eyebrow {
+  font-family: var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--color-gold-deep);
+}
+
+/* Focus ring consistent with brand */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+  border-radius: 6px;
 }

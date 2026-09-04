@@ -1,36 +1,44 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Shahi Lites — Quotations (employee webapp)
 
-## Getting Started
+Internal tool: turn a floor-plan blueprint into a room-by-room lighting
+quotation and email it as a PDF for a manager's review.
 
-First, run the development server:
+**Local-first.** No database, no external accounts. See "How it's wired" below.
+
+## Run
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000 and sign in (mock sign-in — any name + email, pick a
+role). Nothing here talks to Google, Gmail, or a database yet.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## How it's wired (and what swaps later)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Concern | Now (local) | Later |
+| --- | --- | --- |
+| Sign-in | Mock cookie session (`src/lib/session.ts`) | Google OAuth via Auth.js — replace that one file |
+| Data | `data/quotations.json` behind `src/lib/store/` | Supabase/Postgres — new impl of the same interface |
+| Catalog | `src/lib/catalog.ts` (placeholder systems + accessory rules) | Client's spreadsheet, dropped into the same shape |
+| Email | Stub: PDF written to `output/`, send logged | Gmail SMTP (`GMAIL_APP_PASSWORD`) → `hanabiradesigns@gmail.com` → employee |
+| PDF | (Phase 5) `@react-pdf/renderer`, transient, never stored | same |
 
-## Learn More
+Config that will become real client data lives in `src/lib/config.ts`
+(company details, GST 18%, 60-day validity, disclaimer text).
 
-To learn more about Next.js, take a look at the following resources:
+## Build status
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- [x] Phase 0 — scaffold, brand tokens (Cormorant Garamond + Montserrat; white/gold/rich-black), config, types, JSON store, pricing engine
+- [x] Phase 1 — mock auth, app shell + "+" widget (Start New / History / Dashboard), dashboard
+- [ ] Phase 2 — blueprint upload + editable room list
+- [ ] Phase 3 — per-room lighting selection + live cost + accessory rules
+- [ ] Phase 4 — room summary cards
+- [ ] Phase 5 — PDF generation + email (stub) + send for review
+- [ ] Phase 6 — History table + CSV export (date range / day / all)
+- [ ] Phase 7 — manager review queue + approve / reject + notifications
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Stack
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Next.js 16 (App Router) · React 19 · Tailwind v4 · TypeScript.

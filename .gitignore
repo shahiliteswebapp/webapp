@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local JSON store + generated PDFs (never committed)
+/data/*.json
+/output/*.pdf
+
+# sample blueprints — real client/personal files, used only as local test
+# fixtures. Blueprints are never stored, so they are never committed either.
+/blueprint/
