@@ -37,7 +37,10 @@ Config that will become real client data lives in `src/lib/config.ts`
 - [x] Phase 4 — summary: room cards (edit / delete / add) + subtotal → GST → grand total
 - [x] Phase 5 — designed PDF (cover / per-room / totals, watermark), Gmail send (stub), quotation recorded, draft cleared
 - [x] Phase 6 — History: preset + custom date-range + status filters, CSV export
-- [ ] Phase 7 — manager review queue + approve / reject + employee notification
+- [x] Phase 7 — manager review queue: approve / reject + note, employee notification (stub)
+
+All seven core phases complete. Remaining before production: real Google
+sign-in, Supabase for the store, the Gmail app password, deploy.
 
 ## Stack
 
