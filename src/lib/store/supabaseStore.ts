@@ -1,5 +1,7 @@
 import { getSupabase } from "@/lib/supabase";
 import type {
+  AccessEntry,
+  AccessStatus,
   CreateQuotationInput,
   QuotationEvent,
   QuotationFilter,
@@ -9,10 +11,10 @@ import type {
 
 /*
  * Supabase (Postgres) implementation of the quotation store. Selected by
- * src/lib/store/index.ts when SUPABASE_SERVICE_ROLE_KEY is set.
+ * src/lib/store/index.ts when a Supabase key is set.
  *
- * Schema + the create_quotation() RPC live in supabase/schema.sql — run that
- * once in the Supabase SQL editor.
+ * Schema + the create_quotation() RPC live in supabase/schema.sql. Run that
+ * once (and again after updates) in the Supabase SQL editor.
  */
 
 const UUID_RE =
@@ -41,6 +43,18 @@ interface EventRow {
   note: string | null;
 }
 
+interface AccessRow {
+  email: string;
+  name: string | null;
+  status: AccessStatus;
+  added_by: string;
+  added_at: string;
+  removed_by: string | null;
+  removed_at: string | null;
+  last_sign_in_at: string | null;
+  sign_in_count: number;
+}
+
 function mapRecord(r: QuotationRow): QuotationRecord {
   return {
     id: r.id,
@@ -65,6 +79,20 @@ function mapEvent(e: EventRow): QuotationEvent {
     from: e.from_status ?? undefined,
     to: e.to_status,
     note: e.note ?? undefined,
+  };
+}
+
+function mapAccess(a: AccessRow): AccessEntry {
+  return {
+    email: a.email,
+    name: a.name ?? undefined,
+    status: a.status,
+    addedBy: a.added_by,
+    addedAt: a.added_at,
+    removedBy: a.removed_by ?? undefined,
+    removedAt: a.removed_at ?? undefined,
+    lastSignInAt: a.last_sign_in_at ?? undefined,
+    signInCount: a.sign_in_count,
   };
 }
 
@@ -120,6 +148,7 @@ export async function createQuotation(
     p_employee_name: input.employeeName,
     p_employee_email: input.employeeEmail.toLowerCase(),
     p_total_amount: input.totalAmount,
+    p_status: input.status,
   });
   if (error) throw error;
   const row = (Array.isArray(data) ? data[0] : data) as QuotationRow;
@@ -128,7 +157,7 @@ export async function createQuotation(
 
 export async function setStatus(
   id: string,
-  to: Exclude<QuotationStatus, "submitted_for_review">,
+  to: Exclude<QuotationStatus, "submitted_for_review" | "downloaded">,
   actorEmail: string,
   note?: string,
 ): Promise<QuotationRecord | null> {
@@ -163,4 +192,110 @@ export async function setStatus(
   if (evErr) throw evErr;
 
   return mapRecord(row);
+}
+
+/* ---- access control ---- */
+
+export async function isAllowed(email: string): Promise<boolean> {
+  const { data, error } = await getSupabase()
+    .from("app_users")
+    .select("status")
+    .eq("email", email.toLowerCase())
+    .maybeSingle();
+  if (error) throw error;
+  return data?.status === "active";
+}
+
+export async function touchSignIn(email: string, name: string): Promise<void> {
+  const { error } = await getSupabase().rpc("touch_sign_in", {
+    p_email: email.toLowerCase(),
+    p_name: name || null,
+  });
+  if (error) throw error;
+}
+
+export async function listAccess(): Promise<AccessEntry[]> {
+  const { data, error } = await getSupabase()
+    .from("app_users")
+    .select("*")
+    .order("added_at", { ascending: false });
+  if (error) throw error;
+  return (data as AccessRow[]).map(mapAccess);
+}
+
+export async function addAccess(
+  email: string,
+  name: string | undefined,
+  byEmail: string,
+): Promise<AccessEntry> {
+  const sb = getSupabase();
+  const e = email.trim().toLowerCase();
+  const { data: existing } = await sb
+    .from("app_users")
+    .select("email")
+    .eq("email", e)
+    .maybeSingle();
+
+  if (existing) {
+    const { data, error } = await sb
+      .from("app_users")
+      .update({
+        status: "active",
+        removed_at: null,
+        removed_by: null,
+        ...(name ? { name } : {}),
+      })
+      .eq("email", e)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return mapAccess(data as AccessRow);
+  }
+
+  const { data, error } = await sb
+    .from("app_users")
+    .insert({
+      email: e,
+      name: name ?? null,
+      status: "active",
+      added_by: byEmail.toLowerCase(),
+      sign_in_count: 0,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return mapAccess(data as AccessRow);
+}
+
+export async function removeAccess(
+  email: string,
+  byEmail: string,
+): Promise<AccessEntry | null> {
+  const { data, error } = await getSupabase()
+    .from("app_users")
+    .update({
+      status: "removed",
+      removed_at: new Date().toISOString(),
+      removed_by: byEmail.toLowerCase(),
+    })
+    .eq("email", email.trim().toLowerCase())
+    .select("*")
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapAccess(data as AccessRow) : null;
+}
+
+export async function restoreAccess(
+  email: string,
+  _byEmail: string,
+): Promise<AccessEntry | null> {
+  void _byEmail;
+  const { data, error } = await getSupabase()
+    .from("app_users")
+    .update({ status: "active", removed_at: null, removed_by: null })
+    .eq("email", email.trim().toLowerCase())
+    .select("*")
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapAccess(data as AccessRow) : null;
 }

@@ -3,6 +3,7 @@ import path from "node:path";
 import { randomBytes, randomUUID } from "node:crypto";
 import { QUOTE } from "../config";
 import type {
+  AccessEntry,
   CreateQuotationInput,
   QuotationEvent,
   QuotationFilter,
@@ -23,12 +24,13 @@ interface DB {
   quotations: QuotationRecord[];
   events: QuotationEvent[];
   sequences: Record<string, number>; // calendar year -> last number used
+  access: AccessEntry[];
 }
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const FILE = path.join(DATA_DIR, "quotations.json");
 
-const EMPTY: DB = { quotations: [], events: [], sequences: {} };
+const EMPTY: DB = { quotations: [], events: [], sequences: {}, access: [] };
 
 let writeChain: Promise<unknown> = Promise.resolve();
 
@@ -46,6 +48,7 @@ async function read(): Promise<DB> {
       quotations: parsed.quotations ?? [],
       events: parsed.events ?? [],
       sequences: parsed.sequences ?? {},
+      access: parsed.access ?? [],
     };
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
@@ -121,7 +124,7 @@ export async function createQuotation(
       number: formatNumber(year, seq),
       employeeName: input.employeeName,
       employeeEmail: input.employeeEmail.toLowerCase(),
-      status: "submitted_for_review",
+      status: input.status,
       totalAmount: input.totalAmount,
       createdAt: now.toISOString(),
     };
@@ -131,7 +134,7 @@ export async function createQuotation(
       quotationId: record.id,
       at: now.toISOString(),
       actorEmail: record.employeeEmail,
-      to: "submitted_for_review",
+      to: record.status,
     });
 
     await write(db);
@@ -141,7 +144,7 @@ export async function createQuotation(
 
 export async function setStatus(
   id: string,
-  to: Exclude<QuotationStatus, "submitted_for_review">,
+  to: Exclude<QuotationStatus, "submitted_for_review" | "downloaded">,
   actorEmail: string,
   note?: string,
 ): Promise<QuotationRecord | null> {
@@ -170,5 +173,111 @@ export async function setStatus(
 
     await write(db);
     return record;
+  });
+}
+
+/* ---- access control ---- */
+
+export async function isAllowed(email: string): Promise<boolean> {
+  const db = await read();
+  const entry = db.access.find(
+    (a) => a.email.toLowerCase() === email.toLowerCase(),
+  );
+  return entry?.status === "active";
+}
+
+export async function touchSignIn(email: string, name: string): Promise<void> {
+  return serialize(async () => {
+    const db = await read();
+    const e = email.toLowerCase();
+    const now = new Date().toISOString();
+    const entry = db.access.find((a) => a.email.toLowerCase() === e);
+    if (entry) {
+      entry.lastSignInAt = now;
+      entry.signInCount = (entry.signInCount ?? 0) + 1;
+      if (name) entry.name = name;
+    } else {
+      db.access.push({
+        email: e,
+        name,
+        status: "active",
+        addedBy: e,
+        addedAt: now,
+        lastSignInAt: now,
+        signInCount: 1,
+      });
+    }
+    await write(db);
+  });
+}
+
+export async function listAccess(): Promise<AccessEntry[]> {
+  const db = await read();
+  return [...db.access].sort((a, b) => (a.addedAt < b.addedAt ? 1 : -1));
+}
+
+export async function addAccess(
+  email: string,
+  name: string | undefined,
+  byEmail: string,
+): Promise<AccessEntry> {
+  return serialize(async () => {
+    const db = await read();
+    const e = email.trim().toLowerCase();
+    const now = new Date().toISOString();
+    let entry = db.access.find((a) => a.email.toLowerCase() === e);
+    if (entry) {
+      entry.status = "active";
+      entry.removedAt = undefined;
+      entry.removedBy = undefined;
+      if (name) entry.name = name;
+    } else {
+      entry = {
+        email: e,
+        name,
+        status: "active",
+        addedBy: byEmail.toLowerCase(),
+        addedAt: now,
+        signInCount: 0,
+      };
+      db.access.push(entry);
+    }
+    await write(db);
+    return entry;
+  });
+}
+
+export async function removeAccess(
+  email: string,
+  byEmail: string,
+): Promise<AccessEntry | null> {
+  return serialize(async () => {
+    const db = await read();
+    const e = email.trim().toLowerCase();
+    const entry = db.access.find((a) => a.email.toLowerCase() === e);
+    if (!entry) return null;
+    entry.status = "removed";
+    entry.removedAt = new Date().toISOString();
+    entry.removedBy = byEmail.toLowerCase();
+    await write(db);
+    return entry;
+  });
+}
+
+export async function restoreAccess(
+  email: string,
+  byEmail: string,
+): Promise<AccessEntry | null> {
+  return serialize(async () => {
+    const db = await read();
+    const e = email.trim().toLowerCase();
+    const entry = db.access.find((a) => a.email.toLowerCase() === e);
+    if (!entry) return null;
+    entry.status = "active";
+    entry.removedAt = undefined;
+    entry.removedBy = undefined;
+    void byEmail;
+    await write(db);
+    return entry;
   });
 }

@@ -260,8 +260,8 @@ function Footer() {
   return (
     <View style={s.footer} fixed>
       <Text>
-        {COMPANY.legalName} · This PDF is the recipient&apos;s only copy — no copy
-        is retained.
+        {COMPANY.legalName} · This PDF is the recipient&apos;s only copy. No
+        copy is retained.
       </Text>
       <Text
         render={({ pageNumber, totalPages }) =>
@@ -306,7 +306,7 @@ function LineTable({ room }: { room: ComputedRoom }) {
         <View style={s.tRow} key={`acc-${a.accessoryId}`} wrap={false}>
           <Text style={s.cDesc}>
             {a.name}
-            <Text style={{ color: MUTED }}> — connector / driver</Text>
+            <Text style={{ color: MUTED }}> (connector / driver)</Text>
           </Text>
           <Text style={s.cQty}>{a.qty}</Text>
           <Text style={s.cUnit}>nos</Text>
@@ -406,7 +406,7 @@ function QuotationDoc({
           </View>
           <View style={s.metaCell}>
             <Text style={s.metaLabel}>Blueprint</Text>
-            <Text style={s.metaValue}>{blueprintName ?? "—"}</Text>
+            <Text style={s.metaValue}>{blueprintName ?? "Not provided"}</Text>
           </View>
         </View>
 

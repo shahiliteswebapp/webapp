@@ -8,7 +8,7 @@ import { getSession } from "@/lib/session";
 import { Wordmark } from "@/components/brand";
 import { Button } from "@/components/ui";
 
-export const metadata = { title: "Sign in — Shahi Lites" };
+export const metadata = { title: "Sign in · Shahi Lites" };
 
 export default async function SignInPage({
   searchParams,
@@ -20,11 +20,11 @@ export default async function SignInPage({
   const googleMode = googleAuthConfigured();
 
   return (
-    <div className="grid min-h-dvh place-items-center px-5 py-12">
+    <div className="grid min-h-dvh place-items-center px-5 py-10">
       <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
+        <div className="mb-6 text-center">
           <Wordmark subtitle={false} className="justify-center" />
-          <p className="eyebrow mt-3">Employee Portal</p>
+          <p className="eyebrow mt-2">Employee Portal</p>
         </div>
 
         <div className="rounded-[var(--radius-card)] border border-hairline bg-paper p-6">
@@ -33,6 +33,12 @@ export default async function SignInPage({
           {error === "missing" && (
             <p className="mt-3 rounded-md border border-rejected/30 bg-rejected/5 px-3 py-2 text-xs text-rejected">
               Enter both a name and an email address.
+            </p>
+          )}
+          {error === "AccessDenied" && (
+            <p className="mt-3 rounded-md border border-rejected/30 bg-rejected/5 px-3 py-2 text-xs text-rejected">
+              This Gmail address does not have access to Shahi Lites. Ask
+              your superadmin to add it.
             </p>
           )}
           {error === "OAuthAccountNotLinked" && (
@@ -73,9 +79,9 @@ export default async function SignInPage({
           ) : (
             <>
               <p className="mt-1 text-sm text-muted">
-                Local development sign-in. Add the Google OAuth keys to
-                <code className="mx-1">.env.local</code> to switch this to real
-                Google sign-in — nothing else changes.
+                Local development sign-in. Add the Google OAuth keys to{" "}
+                <code className="mx-1">.env.local</code> to switch this to
+                real Google sign-in; nothing else changes.
               </p>
               <form action={signInMockAction} className="mt-5 space-y-4">
                 <label className="block">
@@ -120,10 +126,10 @@ export default async function SignInPage({
                       <input
                         type="radio"
                         name="role"
-                        value="manager"
+                        value="superadmin"
                         className="accent-[var(--color-gold-deep)]"
                       />
-                      Manager
+                      Superadmin
                     </label>
                   </div>
                 </fieldset>
@@ -136,7 +142,7 @@ export default async function SignInPage({
           )}
         </div>
 
-        <p className="mt-6 text-center text-xs text-faint">
+        <p className="mt-5 text-center text-xs text-faint">
           Shahi Lites · internal use only
         </p>
       </div>

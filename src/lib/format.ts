@@ -48,12 +48,12 @@ const TIME = new Intl.DateTimeFormat("en-IN", {
 
 export function fmtDate(iso: string | Date): string {
   const d = typeof iso === "string" ? new Date(iso) : iso;
-  return Number.isNaN(d.getTime()) ? "—" : DATE.format(d);
+  return Number.isNaN(d.getTime()) ? "-" : DATE.format(d);
 }
 
 export function fmtTime(iso: string | Date): string {
   const d = typeof iso === "string" ? new Date(iso) : iso;
-  return Number.isNaN(d.getTime()) ? "—" : TIME.format(d);
+  return Number.isNaN(d.getTime()) ? "-" : TIME.format(d);
 }
 
 /** Local calendar date as YYYY-MM-DD (for <input type="date"> and filters). */
@@ -64,7 +64,7 @@ export function ymd(d: Date): string {
 
 export function fmtDateTime(iso: string | Date): string {
   const d = typeof iso === "string" ? new Date(iso) : iso;
-  return Number.isNaN(d.getTime()) ? "—" : DATETIME.format(d);
+  return Number.isNaN(d.getTime()) ? "-" : DATETIME.format(d);
 }
 
 export function addDays(iso: string | Date, days: number): Date {

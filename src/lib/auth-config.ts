@@ -14,15 +14,38 @@ export function googleAuthConfigured(): boolean {
   );
 }
 
-/**
- * Role for a signed-in email. For now: anyone listed in MANAGER_EMAILS is a
- * manager, everyone else is an employee. (A superadmin UI will manage this
- * later.)
- */
-export function roleForEmail(email: string): Role {
-  const managers = (process.env.MANAGER_EMAILS ?? "")
+function splitList(v: string | undefined): string[] {
+  return (v ?? "")
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
-  return managers.includes(email.trim().toLowerCase()) ? "manager" : "employee";
+}
+
+function superadminEmails(): string[] {
+  // SUPERADMIN_EMAILS is the current name; MANAGER_EMAILS is kept as an
+  // alias so an already-deployed env var keeps working.
+  return [
+    ...splitList(process.env.SUPERADMIN_EMAILS),
+    ...splitList(process.env.MANAGER_EMAILS),
+  ];
+}
+
+/** Role for a signed-in email. Everyone not listed is an employee. */
+export function roleForEmail(email: string): Role {
+  return superadminEmails().includes(email.trim().toLowerCase())
+    ? "superadmin"
+    : "employee";
+}
+
+export function isSuperadminEmail(email: string): boolean {
+  return superadminEmails().includes(email.trim().toLowerCase());
+}
+
+/**
+ * The single reviewer's Gmail — where "send for review" emails land.
+ * QUOTE_RECIPIENT overrides it if set; otherwise the first configured
+ * superadmin email.
+ */
+export function reviewerEmail(): string | undefined {
+  return process.env.QUOTE_RECIPIENT || superadminEmails()[0];
 }

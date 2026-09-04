@@ -11,10 +11,16 @@ const ITEMS = [
   { href: "/dashboard", label: "Dashboard", desc: "Overview" },
 ];
 
-export function PlusWidget() {
+const SUPERADMIN_ITEMS = [
+  { href: "/review", label: "Review queue", desc: "Approve or reject" },
+  { href: "/admin", label: "Access", desc: "Add or remove Gmail IDs" },
+];
+
+export function PlusWidget({ isSuperadmin = false }: { isSuperadmin?: boolean }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  const items = isSuperadmin ? [...ITEMS, ...SUPERADMIN_ITEMS] : ITEMS;
 
   // Close on route change
   useEffect(() => {
@@ -48,11 +54,11 @@ export function PlusWidget() {
       {open && (
         <div className="w-60 overflow-hidden rounded-[var(--radius-card)] border border-hairline bg-paper shadow-lg shadow-black/5">
           <ul className="divide-y divide-hairline">
-            {ITEMS.map((it) => (
+            {items.map((it) => (
               <li key={it.href}>
                 <Link
                   href={it.href}
-                  className="flex flex-col px-4 py-3 hover:bg-gold-tint"
+                  className="flex flex-col px-4 py-2.5 hover:bg-gold-tint"
                 >
                   <span className="text-sm font-medium text-ink">
                     {it.label}

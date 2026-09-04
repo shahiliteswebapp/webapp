@@ -5,19 +5,26 @@ import { googleAuthConfigured } from "@/lib/auth-config";
 import { clearSession, setSession } from "@/lib/session";
 import type { Role } from "@/lib/types";
 
-/** Local mock sign-in — only used when Google auth isn't configured. */
+/** Local mock sign-in, only used when Google auth is not configured. */
 export async function signInMockAction(formData: FormData): Promise<void> {
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "")
     .trim()
     .toLowerCase();
   const role: Role =
-    String(formData.get("role") ?? "employee") === "manager"
-      ? "manager"
+    String(formData.get("role") ?? "employee") === "superadmin"
+      ? "superadmin"
       : "employee";
 
   if (!name || !email) {
     redirect("/sign-in?error=missing");
+  }
+
+  try {
+    const { touchSignIn } = await import("@/lib/store");
+    await touchSignIn(email, name);
+  } catch {
+    /* store not reachable in this dev environment, sign-in still proceeds */
   }
 
   await setSession({ name, email, role });

@@ -10,7 +10,7 @@ import { HistoryFilters } from "@/components/history-filters";
 import { PageHeader, EmptyState, StatusBadge } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "History — Shahi Lites" };
+export const metadata = { title: "History · Shahi Lites" };
 
 export default async function HistoryPage({
   searchParams,
@@ -18,12 +18,12 @@ export default async function HistoryPage({
   searchParams: Promise<{ from?: string; to?: string; status?: string }>;
 }) {
   const session = await requireSession();
-  const isManager = session.role === "manager";
+  const isSuperadmin = session.role === "superadmin";
   const raw = await searchParams;
   const params = parseHistoryParams(raw);
 
   const rows = await listQuotations(
-    toStoreFilter(params, isManager ? undefined : session.email),
+    toStoreFilter(params, isSuperadmin ? undefined : session.email),
   );
 
   const qs = historyQueryString(params);
@@ -37,7 +37,7 @@ export default async function HistoryPage({
       : "all time";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
         eyebrow="History"
         title="Past quotations"
@@ -61,8 +61,8 @@ export default async function HistoryPage({
       />
 
       <p className="text-xs text-muted">
-        Read-only. {isManager ? "All employees." : "Your quotations."} Export
-        respects the filters below.
+        Read-only. {isSuperadmin ? "All employees, every status." : "Your quotations."}{" "}
+        Export respects the filters below.
       </p>
 
       <HistoryFilters />
@@ -77,20 +77,20 @@ export default async function HistoryPage({
       {rows.length === 0 ? (
         <EmptyState
           title="Nothing in this range"
-          hint="Adjust the filters, or send a quotation for review to see it here."
+          hint="Adjust the filters, or generate a quotation to see it here."
         />
       ) : (
         <div className="overflow-x-auto rounded-[var(--radius-card)] border border-hairline">
           <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-panel text-left text-xs uppercase tracking-wider text-muted">
               <tr>
-                <th className="px-4 py-3 font-semibold">Number</th>
-                <th className="px-4 py-3 font-semibold">Generated</th>
-                {isManager && (
-                  <th className="px-4 py-3 font-semibold">Employee</th>
+                <th className="px-4 py-2.5 font-semibold">Number</th>
+                <th className="px-4 py-2.5 font-semibold">Generated</th>
+                {isSuperadmin && (
+                  <th className="px-4 py-2.5 font-semibold">Employee</th>
                 )}
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 text-right font-semibold">
+                <th className="px-4 py-2.5 font-semibold">Status</th>
+                <th className="px-4 py-2.5 text-right font-semibold">
                   Grand total
                 </th>
               </tr>
@@ -98,17 +98,17 @@ export default async function HistoryPage({
             <tbody className="divide-y divide-hairline">
               {rows.map((q) => (
                 <tr key={q.id}>
-                  <td className="px-4 py-3 font-medium text-ink">{q.number}</td>
-                  <td className="px-4 py-3 text-muted">
+                  <td className="px-4 py-2.5 font-medium text-ink">{q.number}</td>
+                  <td className="px-4 py-2.5 text-muted">
                     {fmtDateTime(q.createdAt)}
                   </td>
-                  {isManager && (
-                    <td className="px-4 py-3 text-muted">{q.employeeName}</td>
+                  {isSuperadmin && (
+                    <td className="px-4 py-2.5 text-muted">{q.employeeName}</td>
                   )}
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2.5">
                     <StatusBadge status={q.status} />
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-ink">
+                  <td className="px-4 py-2.5 text-right tabular-nums text-ink">
                     {money(q.totalAmount)}
                   </td>
                 </tr>

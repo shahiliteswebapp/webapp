@@ -163,8 +163,8 @@ export default function RoomLightingPage() {
                                 (s) => s.category === cat,
                               ).map((s) => (
                                 <option key={s.id} value={s.id}>
-                                  {s.name} — {money(s.unitCost)}/
-                                  {UNIT_LABEL[s.unit]}
+                                  {s.name} ({money(s.unitCost)}/
+                                  {UNIT_LABEL[s.unit]})
                                 </option>
                               ))}
                             </optgroup>

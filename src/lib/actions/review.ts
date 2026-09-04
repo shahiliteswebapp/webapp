@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireManager } from "@/lib/session";
+import { requireSuperadmin } from "@/lib/session";
 import { getQuotation, setStatus } from "@/lib/store";
 import { sendDecisionEmail } from "@/lib/email";
 
@@ -17,7 +17,7 @@ export async function decideAction(
   _prev: DecideState,
   formData: FormData,
 ): Promise<DecideState> {
-  const session = await requireManager();
+  const session = await requireSuperadmin();
 
   const id = String(formData.get("id") ?? "");
   const decision = String(formData.get("decision") ?? "");
@@ -44,7 +44,7 @@ export async function decideAction(
       number: updated.number,
       decision,
       note,
-      managerName: session.name,
+      reviewerName: session.name,
       employeeName: updated.employeeName,
       employeeEmail: updated.employeeEmail,
     });

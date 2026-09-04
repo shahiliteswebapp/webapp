@@ -11,8 +11,10 @@ const buttonBase =
   "inline-flex items-center justify-center gap-2 rounded-full px-5 h-10 text-sm font-medium " +
   "transition-colors disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap";
 
+// Gold is the only call-to-action color in this product; red is reserved for
+// destructive actions and rejections; everything else stays black, white, or grey.
 const buttonVariants: Record<ButtonVariant, string> = {
-  primary: "bg-ink-deep text-paper hover:bg-ink",
+  primary: "bg-gold text-ink-deep hover:opacity-90",
   secondary:
     "border border-hairline bg-paper text-ink hover:border-gold hover:bg-gold-tint",
   ghost: "text-ink hover:bg-panel",
@@ -57,7 +59,7 @@ export function Card({
   return (
     <div
       className={cx(
-        "rounded-[var(--radius-card)] border border-hairline bg-paper p-5",
+        "rounded-[var(--radius-card)] border border-hairline bg-paper p-4",
         className,
       )}
     >
@@ -80,7 +82,7 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-4 border-b border-hairline pb-5">
+    <div className="flex flex-wrap items-end justify-between gap-4 border-b border-hairline pb-4">
       <div>
         {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
         <h1 className="font-display text-4xl text-ink-deep">{title}</h1>
@@ -92,9 +94,12 @@ export function PageHeader({
 
 /* ------------------------------- StatusBadge ------------------------------- */
 
+// Only gold (pending), neutral ink (resolved, positive), or red (rejected) --
+// never a status color outside black / white / gold / red.
 const statusStyles: Record<QuotationStatus, string> = {
+  downloaded: "bg-panel text-muted border-hairline",
   submitted_for_review: "bg-gold-tint text-gold-deep border-gold/40",
-  approved: "bg-approved/10 text-approved border-approved/30",
+  approved: "bg-ink-deep/5 text-ink-deep border-ink-deep/20",
   rejected: "bg-rejected/10 text-rejected border-rejected/30",
 };
 
@@ -123,10 +128,10 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded-[var(--radius-card)] border border-dashed border-hairline bg-panel/50 p-8 text-center">
+    <div className="rounded-[var(--radius-card)] border border-dashed border-hairline bg-panel/50 p-6 text-center">
       <p className="font-display text-2xl text-ink-deep">{title}</p>
       {hint && <p className="mt-1 text-sm text-muted">{hint}</p>}
-      {action && <div className="mt-4 flex justify-center">{action}</div>}
+      {action && <div className="mt-3 flex justify-center">{action}</div>}
     </div>
   );
 }

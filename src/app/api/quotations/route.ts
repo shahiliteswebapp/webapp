@@ -15,6 +15,8 @@ interface Body {
   rooms?: DraftRoom[];
   blueprintPreviewDataUrl?: string;
   blueprintName?: string;
+  /** "review" (send it on) or "download" (keep it, no review requested) */
+  action?: "review" | "download";
 }
 
 export async function POST(req: Request) {
@@ -35,19 +37,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "No rooms to quote." }, { status: 400 });
   }
 
-  // Recompute totals server-side — never trust client numbers.
+  // Recompute totals server-side. Client numbers are never trusted.
   const quote = computeQuote(rooms);
   if (quote.grandTotal <= 0) {
     return NextResponse.json(
-      { error: "Add lighting to at least one room before sending." },
+      { error: "Add lighting to at least one room first." },
       { status: 400 },
     );
   }
+
+  const forReview = body.action !== "download";
 
   const record = await createQuotation({
     employeeName: session.name,
     employeeEmail: session.email,
     totalAmount: quote.grandTotal,
+    status: forReview ? "submitted_for_review" : "downloaded",
   });
 
   let pdf: Buffer;
@@ -84,29 +89,33 @@ export async function POST(req: Request) {
 
   let transport: "smtp" | "stub" = "stub";
   let emailError: string | undefined;
-  try {
-    const r = await sendQuotationEmail({
-      number: record.number,
-      pdf,
-      grandTotal: quote.grandTotal,
-      employeeName: session.name,
-    });
-    transport = r.transport;
-  } catch (err) {
-    // Quotation is still recorded — surface the email issue; the client can
-    // still download the PDF from the response.
-    console.error("Email send failed", err);
-    emailError = "Email could not be sent — download the PDF below and keep it safe.";
+
+  if (forReview) {
+    try {
+      const r = await sendQuotationEmail({
+        number: record.number,
+        pdf,
+        grandTotal: quote.grandTotal,
+        employeeName: session.name,
+      });
+      transport = r.transport;
+    } catch (err) {
+      // Quotation is still recorded. Surface the email issue; the client can
+      // still download the PDF from the response.
+      console.error("Email send failed", err);
+      emailError = "Email could not be sent. Download the PDF below and keep it safe.";
+    }
   }
 
   return NextResponse.json({
     number: record.number,
     createdAt: record.createdAt,
     grandTotal: quote.grandTotal,
+    status: record.status,
     transport,
     savedTo,
     emailError,
-    // The recipient's only copy — the client offers it as a download.
+    // The recipient's only copy. The client offers it as a download.
     pdfBase64: pdf.toString("base64"),
   });
 }

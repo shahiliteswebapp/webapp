@@ -1,29 +1,29 @@
-import { requireManager } from "@/lib/session";
+import { requireSuperadmin } from "@/lib/session";
 import { listQuotations } from "@/lib/store";
 import { fmtDateTime, money } from "@/lib/format";
 import { PageHeader, EmptyState, Eyebrow, StatusBadge } from "@/components/ui";
 import { ReviewList } from "@/components/review-list";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Review queue — Shahi Lites" };
+export const metadata = { title: "Review queue · Shahi Lites" };
 
 export default async function ReviewPage() {
-  await requireManager();
+  await requireSuperadmin();
 
   const all = await listQuotations({});
   const pending = all.filter((q) => q.status === "submitted_for_review");
   const recent = all
-    .filter((q) => q.status !== "submitted_for_review")
-    .sort((a, b) => (a.reviewedAt ?? "") < (b.reviewedAt ?? "") ? 1 : -1)
+    .filter((q) => q.status === "approved" || q.status === "rejected")
+    .sort((a, b) => ((a.reviewedAt ?? "") < (b.reviewedAt ?? "") ? 1 : -1))
     .slice(0, 8);
 
   return (
-    <div className="space-y-8">
-      <PageHeader eyebrow="Manager" title="Review queue" />
+    <div className="space-y-6">
+      <PageHeader eyebrow="Superadmin" title="Review queue" />
 
       <p className="text-sm text-muted">
-        The quotation PDF (sent to your Gmail) is the document under review.
-        Quotation contents aren&rsquo;t stored here — decide by number.
+        The quotation PDF, emailed to your Gmail, is the document under
+        review. Quotation contents are not stored here, so decide by number.
       </p>
 
       <section className="space-y-3">
@@ -45,28 +45,28 @@ export default async function ReviewPage() {
             <table className="w-full min-w-[560px] text-sm">
               <thead className="bg-panel text-left text-xs uppercase tracking-wider text-muted">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Number</th>
-                  <th className="px-4 py-3 font-semibold">Employee</th>
-                  <th className="px-4 py-3 font-semibold">Decision</th>
-                  <th className="px-4 py-3 font-semibold">Decided</th>
-                  <th className="px-4 py-3 font-semibold">Note</th>
+                  <th className="px-4 py-2.5 font-semibold">Number</th>
+                  <th className="px-4 py-2.5 font-semibold">Employee</th>
+                  <th className="px-4 py-2.5 font-semibold">Decision</th>
+                  <th className="px-4 py-2.5 font-semibold">Decided</th>
+                  <th className="px-4 py-2.5 font-semibold">Note</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-hairline">
                 {recent.map((q) => (
                   <tr key={q.id}>
-                    <td className="px-4 py-3 font-medium text-ink">
+                    <td className="px-4 py-2.5 font-medium text-ink">
                       {q.number}
                     </td>
-                    <td className="px-4 py-3 text-muted">{q.employeeName}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-2.5 text-muted">{q.employeeName}</td>
+                    <td className="px-4 py-2.5">
                       <StatusBadge status={q.status} />
                     </td>
-                    <td className="px-4 py-3 text-muted">
-                      {q.reviewedAt ? fmtDateTime(q.reviewedAt) : "—"}
+                    <td className="px-4 py-2.5 text-muted">
+                      {q.reviewedAt ? fmtDateTime(q.reviewedAt) : "-"}
                     </td>
-                    <td className="px-4 py-3 text-muted">
-                      {q.reviewNote || "—"}
+                    <td className="px-4 py-2.5 text-muted">
+                      {q.reviewNote || "-"}
                     </td>
                   </tr>
                 ))}

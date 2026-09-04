@@ -10,10 +10,12 @@ import { downscaleDataUrl } from "@/lib/draft/render";
 import { money } from "@/lib/format";
 import { computeQuote } from "@/lib/quote";
 
+type Action = "review" | "download";
+
 export default function SendPage() {
   const router = useRouter();
   const { loaded, draft, discard } = useDraft();
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<Action | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -31,8 +33,8 @@ export default function SendPage() {
   const quote = computeQuote(draft.rooms);
   const canSend = quote.grandTotal > 0;
 
-  const send = async () => {
-    setBusy(true);
+  const submit = async (action: Action) => {
+    setBusy(action);
     setError(null);
     try {
       const thumb = await downscaleDataUrl(
@@ -46,12 +48,13 @@ export default function SendPage() {
           rooms: draft.rooms,
           blueprintPreviewDataUrl: thumb,
           blueprintName: draft.blueprint!.name,
+          action,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data?.error ?? "Something went wrong. Please try again.");
-        setBusy(false);
+        setBusy(null);
         return;
       }
       // Hand the PDF to the confirmation page for download (too large for the URL).
@@ -60,19 +63,20 @@ export default function SendPage() {
           sessionStorage.setItem(`sl-pdf:${data.number}`, data.pdfBase64);
         }
       } catch {
-        /* storage blocked — the confirmation page just won't offer a download */
+        /* storage blocked, the confirmation page just will not offer a download */
       }
       await discard();
       const q = new URLSearchParams({
         number: data.number,
         transport: data.transport,
+        status: data.status ?? "",
         saved: data.savedTo ?? "",
       });
       if (data.emailError) q.set("emailError", data.emailError);
       router.replace(`/new/sent?${q.toString()}`);
     } catch {
-      setError("Network error — the quotation was not sent.");
-      setBusy(false);
+      setError("Network error. The quotation was not generated.");
+      setBusy(null);
     }
   };
 
@@ -80,7 +84,7 @@ export default function SendPage() {
     <div className="space-y-6">
       <div className="border-b border-hairline pb-5">
         <Eyebrow>Start New</Eyebrow>
-        <h1 className="font-display text-4xl text-ink-deep">Send for review</h1>
+        <h1 className="font-display text-4xl text-ink-deep">Finish up</h1>
         <div className="mt-4">
           <WizardSteps current={4} />
         </div>
@@ -91,7 +95,7 @@ export default function SendPage() {
           <div className="flex items-baseline justify-between">
             <Eyebrow>Quotation</Eyebrow>
             <span className="text-xs text-faint">
-              Number assigned on send
+              Number assigned when you continue
             </span>
           </div>
 
@@ -118,23 +122,21 @@ export default function SendPage() {
         </Card>
 
         <Card className="space-y-2 bg-panel">
-          <Eyebrow>What happens next</Eyebrow>
+          <Eyebrow>Two ways to finish</Eyebrow>
           <ul className="space-y-1.5 text-sm text-muted">
             <li>
-              A quotation number ({QUOTE.numberPrefix}-YYYY-NNNN) is assigned and
-              logged with status <em>submitted for review</em>.
+              <span className="text-ink">Send for review</span>: a quotation
+              number ({QUOTE.numberPrefix}-YYYY-NNNN) is logged, and the PDF is
+              emailed to the reviewer for approval.
             </li>
             <li>
-              The PDF is emailed to{" "}
-              <span className="text-ink">{EMAIL.recipientOverride}</span>{" "}
-              <span className="text-faint">
-                (until the Gmail app password is set, it&rsquo;s saved to{" "}
-                <code>output/</code> instead).
-              </span>
+              <span className="text-ink">Download only</span>: a number is
+              still logged, but the PDF comes straight to you and nobody is
+              asked to review it.
             </li>
             <li>
-              This draft — blueprint and line items — is cleared from this
-              device. It is never stored on a server.
+              Either way, this draft (blueprint and line items) is cleared
+              from this device. It is never stored on a server.
             </li>
           </ul>
         </Card>
@@ -149,13 +151,25 @@ export default function SendPage() {
           </p>
         )}
 
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col-reverse items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
           <ButtonLink href="/new/summary" variant="ghost">
             Back to summary
           </ButtonLink>
-          <Button onClick={send} disabled={busy || !canSend}>
-            {busy ? "Generating & sending…" : "Send for review"}
-          </Button>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button
+              variant="secondary"
+              onClick={() => submit("download")}
+              disabled={busy !== null || !canSend}
+            >
+              {busy === "download" ? "Generating…" : "Download only"}
+            </Button>
+            <Button
+              onClick={() => submit("review")}
+              disabled={busy !== null || !canSend}
+            >
+              {busy === "review" ? "Generating & sending…" : "Send for review"}
+            </Button>
+          </div>
         </div>
         <p className="text-center text-xs text-faint">
           From {COMPANY.legalName} · {EMAIL.senderEmail}

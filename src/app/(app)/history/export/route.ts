@@ -21,9 +21,9 @@ export async function GET(req: Request) {
     status: url.searchParams.get("status") ?? undefined,
   });
 
-  const isManager = session.role === "manager";
+  const isSuperadmin = session.role === "superadmin";
   const rows = await listQuotations(
-    toStoreFilter(params, isManager ? undefined : session.email),
+    toStoreFilter(params, isSuperadmin ? undefined : session.email),
   );
 
   const csv = toCsv(

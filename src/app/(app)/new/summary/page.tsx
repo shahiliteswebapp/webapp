@@ -187,12 +187,11 @@ export default function SummaryPage() {
             </dl>
           </div>
 
-          {/* Send CTA (Phase 5) */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-4">
             <ButtonLink href={`/new/rooms/${draft.rooms[0].id}`} variant="ghost">
               Back to rooms
             </ButtonLink>
-            <ButtonLink href="/new/send">Receive quotation &amp; send</ButtonLink>
+            <ButtonLink href="/new/send">Continue</ButtonLink>
           </div>
         </div>
       </div>

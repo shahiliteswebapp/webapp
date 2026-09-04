@@ -1,18 +1,18 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { googleAuthConfigured, roleForEmail } from "./auth-config";
+import { googleAuthConfigured, isSuperadminEmail, roleForEmail } from "./auth-config";
 import type { Role } from "./types";
 
 /*
  * Session layer. Two modes, chosen automatically:
  *
  *  - Google mode (AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET / AUTH_SECRET all set):
- *    reads the Auth.js session; role comes from MANAGER_EMAILS.
+ *    reads the Auth.js session; role comes from SUPERADMIN_EMAILS.
  *  - Local mock mode (default): a single httpOnly cookie holds { name, email,
  *    role } chosen on the mock sign-in form.
  *
- * `getSession` / `requireSession` / `requireManager` are the only interface the
- * rest of the app uses — both modes return the same `Session` shape.
+ * `getSession` / `requireSession` / `requireSuperadmin` are the only
+ * interface the rest of the app uses -- both modes return the same `Session`.
  */
 
 const COOKIE = "sl_session";
@@ -35,7 +35,7 @@ function decode(raw: string): Session | null {
       obj &&
       typeof obj.name === "string" &&
       typeof obj.email === "string" &&
-      (obj.role === "employee" || obj.role === "manager")
+      (obj.role === "employee" || obj.role === "superadmin")
     ) {
       return { name: obj.name, email: obj.email, role: obj.role };
     }
@@ -51,6 +51,14 @@ export async function getSession(): Promise<Session | null> {
     const s = await auth();
     const email = s?.user?.email?.trim().toLowerCase();
     if (!email) return null;
+
+    // Defense in depth: a superadmin who removes someone mid-session should
+    // lose access on their very next request, not just their next sign-in.
+    if (!isSuperadminEmail(email)) {
+      const { isAllowed } = await import("@/lib/store");
+      if (!(await isAllowed(email))) return null;
+    }
+
     return {
       name: s?.user?.name?.trim() || email,
       email,
@@ -73,10 +81,10 @@ export async function requireSession(): Promise<Session> {
   return session;
 }
 
-/** Manager-only guard. */
-export async function requireManager(): Promise<Session> {
+/** Superadmin-only guard (review queue, access list). */
+export async function requireSuperadmin(): Promise<Session> {
   const session = await requireSession();
-  if (session.role !== "manager") redirect("/dashboard");
+  if (session.role !== "superadmin") redirect("/dashboard");
   return session;
 }
 

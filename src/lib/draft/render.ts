@@ -40,7 +40,7 @@ export async function renderBlueprint(file: File): Promise<RenderResult> {
     file.type === "image/png" || file.name.toLowerCase().endsWith(".png");
 
   if (!isPdf && !isPng) {
-    throw new BlueprintError(`Unsupported file type — upload ${UPLOAD.acceptedLabel}.`);
+    throw new BlueprintError(`Unsupported file type. Upload ${UPLOAD.acceptedLabel}.`);
   }
   if (file.size > UPLOAD.maxBytes) {
     throw new BlueprintError(

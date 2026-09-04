@@ -1,3 +1,4 @@
+import { reviewerEmail } from "./auth-config";
 import { EMAIL } from "./config";
 import { money } from "./format";
 import { STATUS_LABEL, type QuotationStatus } from "./types";
@@ -8,17 +9,10 @@ export interface SendResult {
   messageId?: string;
 }
 
-function config(employeeEmail?: string) {
+function senderPass(): { from: string; pass: string | undefined } {
   return {
-    pass: process.env.GMAIL_APP_PASSWORD,
     from: process.env.GMAIL_SENDER || EMAIL.senderEmail,
-    // Everything goes to the single fixed recipient for now; drop
-    // recipientOverride later to reach the actual employee.
-    to:
-      process.env.QUOTE_RECIPIENT ||
-      EMAIL.recipientOverride ||
-      employeeEmail ||
-      EMAIL.senderEmail,
+    pass: process.env.GMAIL_APP_PASSWORD,
   };
 }
 
@@ -45,44 +39,55 @@ async function send(
   return { transport: "smtp", to, messageId: info.messageId };
 }
 
-/* Emails the quotation PDF (stub until GMAIL_APP_PASSWORD is set). */
+/*
+ * Emails the quotation PDF to the reviewer (the superadmin's real Gmail, or
+ * QUOTE_RECIPIENT if set) when an employee sends it for review. Stubbed until
+ * GMAIL_APP_PASSWORD is set.
+ */
 export async function sendQuotationEmail(args: {
   number: string;
   pdf: Buffer;
   grandTotal: number;
   employeeName: string;
 }): Promise<SendResult> {
-  const { pass, from, to } = config();
+  const { from, pass } = senderPass();
+  const to = reviewerEmail();
+  if (!to) {
+    throw new Error(
+      "No reviewer configured (set SUPERADMIN_EMAILS or QUOTE_RECIPIENT).",
+    );
+  }
   if (!pass) return { transport: "stub", to };
 
   return send(to, from, pass, {
-    subject: `Shahi Lites — Quotation ${args.number}`,
+    subject: `Shahi Lites: Quotation ${args.number} for review`,
     text: [
       `Quotation ${args.number}`,
       `Prepared by: ${args.employeeName}`,
       `Grand total: ${money(args.grandTotal)} (incl. GST)`,
       "",
       "The attached PDF is the only copy of this quotation. Shahi Lites does",
-      "not retain a copy of the document or its line items — please keep it safe.",
+      "not retain a copy of the document or its line items. Please keep it safe.",
     ].join("\n"),
     attachments: [{ filename: `${args.number}.pdf`, content: args.pdf }],
   });
 }
 
-/* Notifies the employee that a manager approved or rejected their quotation. */
+/* Notifies the employee directly that their quotation was approved or rejected. */
 export async function sendDecisionEmail(args: {
   number: string;
-  decision: Exclude<QuotationStatus, "submitted_for_review">;
+  decision: Exclude<QuotationStatus, "submitted_for_review" | "downloaded">;
   note?: string;
-  managerName: string;
+  reviewerName: string;
   employeeName: string;
   employeeEmail: string;
 }): Promise<SendResult> {
-  const { pass, from, to } = config(args.employeeEmail);
+  const { from, pass } = senderPass();
+  const to = args.employeeEmail;
   if (!pass) return { transport: "stub", to };
 
   return send(to, from, pass, {
-    subject: `Shahi Lites — Quotation ${args.number} ${
+    subject: `Shahi Lites: Quotation ${args.number} ${
       args.decision === "approved" ? "approved" : "rejected"
     }`,
     text: [
@@ -90,10 +95,10 @@ export async function sendDecisionEmail(args: {
       "",
       `Quotation ${args.number} has been ${STATUS_LABEL[
         args.decision
-      ].toLowerCase()} by ${args.managerName}.`,
+      ].toLowerCase()} by ${args.reviewerName}.`,
       ...(args.note ? ["", `Note: ${args.note}`] : []),
       "",
-      "— Shahi Lites",
+      "Shahi Lites",
     ].join("\n"),
   });
 }

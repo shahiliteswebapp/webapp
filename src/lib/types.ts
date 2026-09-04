@@ -1,11 +1,18 @@
-export type Role = "employee" | "manager";
+/*
+ * Two roles: an employee builds and sends quotations; the superadmin does
+ * everything an employee can, plus reviews (approve/reject), sees every
+ * quotation regardless of status, and controls who may sign in at all.
+ */
+export type Role = "employee" | "superadmin";
 
 export type QuotationStatus =
+  | "downloaded" // generated + downloaded, never sent for review
   | "submitted_for_review"
   | "approved"
   | "rejected";
 
 export const STATUS_LABEL: Record<QuotationStatus, string> = {
+  downloaded: "Downloaded only",
   submitted_for_review: "Submitted for review",
   approved: "Generated successfully",
   rejected: "Rejected",
@@ -13,7 +20,7 @@ export const STATUS_LABEL: Record<QuotationStatus, string> = {
 
 /*
  * The ONLY thing persisted server-side. No blueprint, no rooms, no line items —
- * just the ledger entry for a quotation that was sent for review.
+ * just the ledger entry for a quotation that was generated.
  */
 export interface QuotationRecord {
   id: string;
@@ -23,9 +30,25 @@ export interface QuotationRecord {
   status: QuotationStatus;
   totalAmount: number; // grand total incl. GST, INR
   createdAt: string; // ISO timestamp (generation date & time)
-  reviewedBy?: string; // manager email
+  reviewedBy?: string; // reviewer email
   reviewedAt?: string; // ISO timestamp
   reviewNote?: string;
+}
+
+/* ---- access control: who may sign in at all ---- */
+
+export type AccessStatus = "active" | "removed";
+
+export interface AccessEntry {
+  email: string;
+  name?: string;
+  status: AccessStatus;
+  addedBy: string;
+  addedAt: string;
+  removedBy?: string;
+  removedAt?: string;
+  lastSignInAt?: string;
+  signInCount: number;
 }
 
 export interface QuotationEvent {
@@ -53,6 +76,8 @@ export interface CreateQuotationInput {
   employeeName: string;
   employeeEmail: string;
   totalAmount: number;
+  /** "downloaded" (no review requested) or "submitted_for_review" */
+  status: Extract<QuotationStatus, "downloaded" | "submitted_for_review">;
 }
 
 /* ---- In-browser wizard draft (never leaves the device until "send") ---- */

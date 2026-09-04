@@ -8,14 +8,14 @@ export const COMPANY = {
   legalName: "Shahi Lites",
   tagline: "Lighting Design & Supply",
   addressLines: [
-    "[Address line 1 — placeholder]",
-    "[Address line 2 — placeholder]",
-    "[City, State — PIN placeholder]",
+    "[Address line 1]",
+    "[Address line 2]",
+    "[City, State, PIN]",
   ],
-  phones: ["[+91 00000 00000 — placeholder]"],
+  phones: ["[Phone number]"],
   email: "hanabiradesigns@gmail.com",
   // No website for now (per client).
-  gstin: "[GSTIN — placeholder]",
+  gstin: "[GSTIN]",
 } as const;
 
 export const QUOTE = {
@@ -28,22 +28,21 @@ export const QUOTE = {
 } as const;
 
 /*
- * Email routing. For now every quotation / notification email is sent from a
- * single Gmail account to a single fixed recipient, regardless of who is
- * signed in. Change `recipientOverride` to `null` later to send to the actual
- * signed-in employee instead.
+ * Email routing. Every quotation email is sent from a single Gmail account.
+ * The recipient for "send for review" is resolved dynamically to the actual
+ * reviewer's Gmail (see reviewerEmail() in auth-config.ts) — there is one
+ * reviewer (the superadmin). QUOTE_RECIPIENT in .env.local overrides it if set.
+ * When GMAIL_APP_PASSWORD is not set, sending is stubbed: the PDF is written
+ * to ./output (local only) and handed to the browser as a download instead.
  */
 export const EMAIL = {
   senderName: "Shahi Lites",
   senderEmail: "hanabiradesigns@gmail.com",
-  recipientOverride: "stuti.ghoshal61@gmail.com",
-  // When GMAIL_APP_PASSWORD is not set, sending is stubbed: the PDF is written
-  // to ./output and the "send" is logged instead of transmitted.
 } as const;
 
 export const DISCLAIMER =
   "This PDF is the only copy of this quotation. Shahi Lites does not store or retain " +
-  "this document or its line items — please keep this file safe, as it cannot be " +
+  "this document or its line items. Please keep this file safe, as it cannot be " +
   "reissued or reconstructed. All amounts are in Indian Rupees (INR); GST is charged " +
   "at 18% as shown. This quotation is valid for 2 months (60 days) from the date and " +
   "time of generation.";

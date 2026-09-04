@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
-  Shahi Lites — brand tokens
+  Shahi Lites brand tokens
   Rich black + white + gold, weighted toward white. Light theme only (deliberate).
   Fonts: Cormorant Garamond (thin serif display) + Montserrat (UI / body).
 */
@@ -22,9 +22,9 @@
   --color-gold-deep: #8a6a2b;
   --color-gold-tint: #f6efdd;
 
-  --color-approved: #3e7c59;
+  /* The only non-neutral colors in this product: gold marks calls to
+     action; red is reserved for destructive actions and rejections. */
   --color-rejected: #a23b3b;
-  --color-pending: #b8912f;
 
   --radius-card: 14px;
 }
@@ -46,6 +46,7 @@ body {
   background: var(--color-paper);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  line-height: 1.4;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   /* safety net: nothing should scroll the page sideways ('clip' keeps
@@ -53,10 +54,15 @@ body {
   overflow-x: clip;
 }
 
+p, li, dt, dd, td, th {
+  line-height: 1.4;
+}
+
 .font-display {
   font-family: var(--font-display);
   font-weight: 300;
   letter-spacing: 0.01em;
+  line-height: 1.15;
 }
 
 /* Thin, wide section label */

@@ -16,7 +16,7 @@ const sans = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "Shahi Lites — Quotations",
+  title: "Shahi Lites Quotations",
   description: "Internal lighting quotation tool for Shahi Lites.",
 };
 

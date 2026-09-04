@@ -24,7 +24,7 @@ export default function BlueprintUploadPage() {
       setWarn(null);
       if (file.size > UPLOAD.softWarnBytes && file.size <= UPLOAD.maxBytes) {
         setWarn(
-          `Large file (${(file.size / 1024 / 1024).toFixed(1)} MB) — it may take a moment to render.`,
+          `Large file (${(file.size / 1024 / 1024).toFixed(1)} MB). It may take a moment to render.`,
         );
       }
       setBusy(true);
@@ -60,8 +60,8 @@ export default function BlueprintUploadPage() {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="border-b border-hairline pb-5">
+    <div className="space-y-6">
+      <div className="border-b border-hairline pb-4">
         <Eyebrow>Start New</Eyebrow>
         <h1 className="font-display text-4xl text-ink-deep">New quotation</h1>
         <div className="mt-4">
@@ -177,7 +177,7 @@ export default function BlueprintUploadPage() {
             </p>
           )}
           <p className="text-xs text-faint">
-            The blueprint stays on your device — it is never uploaded to a
+            The blueprint stays on your device. It is never uploaded to a
             server or stored by Shahi Lites.
           </p>
         </div>

@@ -1,8 +1,8 @@
--- Shahi Lites — quotation store schema.
--- Run once in the Supabase SQL editor (Dashboard -> SQL Editor -> New query).
--- Safe to re-run.
+-- Shahi Lites -- quotation store schema.
+-- Run in the Supabase SQL editor (Dashboard -> SQL Editor -> New query).
+-- Safe to re-run after updates.
 
--- ── tables ────────────────────────────────────────────────────────────────────
+-- tables
 
 create table if not exists public.quotation_counters (
   year        int primary key,
@@ -15,7 +15,7 @@ create table if not exists public.quotations (
   employee_name   text not null,
   employee_email  text not null,
   status          text not null default 'submitted_for_review'
-                    check (status in ('submitted_for_review','approved','rejected')),
+                    check (status in ('downloaded','submitted_for_review','approved','rejected')),
   total_amount    numeric(12,2) not null,
   created_at      timestamptz not null default now(),
   reviewed_by     text,
@@ -33,25 +33,46 @@ create table if not exists public.quotation_events (
   note          text
 );
 
+-- Access list. Sign-in is only allowed for an email whose row here has
+-- status = 'active'. A superadmin (SUPERADMIN_EMAILS) can always sign in
+-- regardless of this table.
+create table if not exists public.app_users (
+  email            text primary key,
+  name             text,
+  status           text not null default 'active' check (status in ('active','removed')),
+  added_by         text not null,
+  added_at         timestamptz not null default now(),
+  removed_by       text,
+  removed_at       timestamptz,
+  last_sign_in_at  timestamptz,
+  sign_in_count    int not null default 0
+);
+
 create index if not exists quotations_created_at_idx on public.quotations (created_at desc);
 create index if not exists quotations_email_idx      on public.quotations (employee_email);
 create index if not exists quotations_status_idx     on public.quotations (status);
 create index if not exists quotation_events_qid_idx  on public.quotation_events (quotation_id);
+create index if not exists app_users_status_idx      on public.app_users (status);
 
--- ── RLS: lock the tables; only the service-role key (used server-side) gets in ─
+-- Also allow the new 'downloaded' status on a table created before this change.
+alter table public.quotations drop constraint if exists quotations_status_check;
+alter table public.quotations add constraint quotations_status_check
+  check (status in ('downloaded','submitted_for_review','approved','rejected'));
 
-alter table public.quotations        enable row level security;
-alter table public.quotation_events  enable row level security;
+-- RLS: lock the tables; only the server (secret key) reads or writes them.
+
+alter table public.quotations         enable row level security;
+alter table public.quotation_events   enable row level security;
 alter table public.quotation_counters enable row level security;
--- (no policies -> anon/authenticated clients cannot read or write; the app's
---  server uses the service-role key, which bypasses RLS)
+alter table public.app_users          enable row level security;
 
--- ── atomic quotation creation: allocate SL-YYYY-NNNN + insert + log an event ──
+-- atomic quotation creation: allocate SL-YYYY-NNNN + insert + log an event
 
 create or replace function public.create_quotation(
   p_employee_name   text,
   p_employee_email  text,
-  p_total_amount    numeric
+  p_total_amount    numeric,
+  p_status          text default 'submitted_for_review'
 ) returns public.quotations
 language plpgsql
 security definer
@@ -74,15 +95,38 @@ begin
   insert into public.quotations
     (number, employee_name, employee_email, total_amount, status)
   values
-    (v_number, p_employee_name, p_employee_email, p_total_amount, 'submitted_for_review')
+    (v_number, p_employee_name, p_employee_email, p_total_amount, p_status)
   returning * into v_row;
 
   insert into public.quotation_events (quotation_id, actor_email, to_status)
-  values (v_row.id, p_employee_email, 'submitted_for_review');
+  values (v_row.id, p_employee_email, p_status);
 
   return v_row;
 end;
 $$;
 
--- Make PostgREST pick up the new tables/function immediately.
+-- upsert a sign-in: creates the access row on first sign-in, else bumps stats
+create or replace function public.touch_sign_in(
+  p_email text,
+  p_name  text default null
+) returns public.app_users
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row public.app_users;
+begin
+  insert into public.app_users (email, name, status, added_by, sign_in_count, last_sign_in_at)
+    values (p_email, p_name, 'active', p_email, 1, now())
+  on conflict (email) do update
+    set sign_in_count   = app_users.sign_in_count + 1,
+        last_sign_in_at = now(),
+        name            = coalesce(excluded.name, app_users.name)
+  returning * into v_row;
+
+  return v_row;
+end;
+$$;
+
 notify pgrst, 'reload schema';
