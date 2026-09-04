@@ -34,7 +34,7 @@ Config that will become real client data lives in `src/lib/config.ts`
 - [x] Phase 1 — mock auth, app shell + "+" widget (Start New / History / Dashboard), dashboard
 - [x] Phase 2 — blueprint upload (PDF via pdf.js / PNG), IndexedDB draft autosave, pan/zoom viewer, editable room list
 - [x] Phase 3 — per-room lighting picker, live cost, auto connectors/drivers from rules, room switcher
-- [ ] Phase 4 — room summary cards
+- [x] Phase 4 — summary: room cards (edit / delete / add) + subtotal → GST → grand total
 - [ ] Phase 5 — PDF generation + email (stub) + send for review
 - [ ] Phase 6 — History table + CSV export (date range / day / all)
 - [ ] Phase 7 — manager review queue + approve / reject + notifications
