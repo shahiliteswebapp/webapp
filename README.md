@@ -36,8 +36,8 @@ Config that will become real client data lives in `src/lib/config.ts`
 - [x] Phase 3 — per-room lighting picker, live cost, auto connectors/drivers from rules, room switcher
 - [x] Phase 4 — summary: room cards (edit / delete / add) + subtotal → GST → grand total
 - [x] Phase 5 — designed PDF (cover / per-room / totals, watermark), Gmail send (stub), quotation recorded, draft cleared
-- [ ] Phase 6 — History table + CSV export (date range / day / all)
-- [ ] Phase 7 — manager review queue + approve / reject + notifications
+- [x] Phase 6 — History: preset + custom date-range + status filters, CSV export
+- [ ] Phase 7 — manager review queue + approve / reject + employee notification
 
 ## Stack
 
