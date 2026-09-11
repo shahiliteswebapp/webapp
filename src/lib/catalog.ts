@@ -1,16 +1,38 @@
 /*
- * PLACEHOLDER lighting catalog for local development.
+ * Real lighting catalog, imported from the client's source documents:
+ *   - functional fixtures: rawdata/ECO 25-26 (V 1.5).pdf, rawdata/Architectural Product list -Dec'25.pdf
+ *   - decorative fixtures: rawdata/Geo Liting Hanging & Celliling Light Part 1.pdf, rawdata/Geo Liting Mix 1 Updated.pdf
+ * Parsed once into catalog-data.json (see scripts used at import time — not part of the app).
  *
- * Shape matches what the real spreadsheet will provide:
- *   - a lighting system has a unit ("nos" / "mtr"), a unit cost, and zero or more
- *     accessory rules
- *   - an accessory rule = "1 <accessory> for every N units of this system,
- *     rounded up", quantified per room
+ * Decorative items (Geo Liting) carry unitCost 0: the source catalogue has no price column,
+ * only item no / lamp / size / finish / material. Needs a priced sheet from the client before
+ * decorative lines can go into a real quotation.
  *
- * Replace the arrays below with the client's real data. Nothing else changes.
+ * `layer`, `mounting`, `style`, `indoorOutdoor` are not present in any source document — they're
+ * either an inferred category→layer mapping (functional) or left null pending client tagging
+ * (decorative). Accessory auto-add `rules` are empty for every real system: no accessory-trigger
+ * data exists for the real catalog yet, unlike the old placeholder set.
  */
 
+import catalogData from "./catalog-data.json";
+
 export type Unit = "nos" | "mtr";
+
+export type InterfaceTag = "RF" | "DALI" | "BLE" | "PRO" | "TRIAC" | "DIMMABLE" | "TUNABLE";
+export type ControlMode = "dimmable" | "tunable";
+
+/** One automation upsell for a system: total price when that interface/control is chosen. */
+export interface InterfaceOption {
+  interface: InterfaceTag;
+  control: ControlMode;
+  price: number | null;
+}
+
+/** One finish/colour price variant (distinct from automation upsells). */
+export interface FinishOption {
+  label: string;
+  price: number;
+}
 
 export interface Accessory {
   id: string;
@@ -25,19 +47,78 @@ export interface AccessoryRule {
   perUnits: number;
 }
 
-export interface LightingSystem {
+/** Layer 1 Ambient/Direct · 2 Indirect · 3 Accent · 4 Task · 5 Outdoor · 6 Facade */
+export type Layer = 1 | 2 | 3 | 4 | 5 | 6;
+
+export const LAYER_LABEL: Record<Layer, string> = {
+  1: "Ambient / Direct",
+  2: "Indirect",
+  3: "Accent",
+  4: "Task",
+  5: "Outdoor",
+  6: "Facade",
+};
+
+interface BaseSystem {
   id: string;
+  sourceCode: string;
   name: string;
-  category: string;
   unit: Unit;
-  unitCost: number; // INR
+  unitCost: number; // INR, base (on/off) price
   rules: AccessoryRule[];
+  automatic: boolean;
+  interfaceOptions: InterfaceOption[];
+  source: string;
 }
+
+export interface FunctionalSystem extends BaseSystem {
+  kind: "functional";
+  category: string;
+  layer: Layer | null;
+  finishOptions: FinishOption[];
+  size: string | null;
+  cutout: string | null;
+  finish: string | null;
+  watt: string | null;
+  wattNum: number | null;
+  ledSource: string | null;
+  ipRating: string | null;
+  colour: string | null;
+}
+
+export const DECOR_TYPES = [
+  "Chandelier",
+  "Wall light",
+  "Hanging light",
+  "Bed side light",
+  "Mirror light",
+  "Picture light",
+] as const;
+export type DecorType = (typeof DECOR_TYPES)[number];
+
+export const DECOR_STYLES = ["modern", "classical", "rustic"] as const;
+export type DecorStyle = (typeof DECOR_STYLES)[number];
+
+export interface DecorativeSystem extends BaseSystem {
+  kind: "decorative";
+  decorType: string;
+  mounting: string | null; // e.g. ceiling mounted / suspended / staircase / double height (chandeliers)
+  style: string | null; // modern / classical / rustic
+  indoorOutdoor: "indoor" | "outdoor" | null;
+  size: string | null;
+  finish: string | null;
+  material: string | null;
+  lamp: string | null;
+  sku: string | null;
+}
+
+export type LightingSystem = FunctionalSystem | DecorativeSystem;
+
+export const LIGHTING_SYSTEMS = catalogData as unknown as LightingSystem[];
 
 export const ACCESSORIES: Accessory[] = [
   { id: "drv-4", name: "LED Driver (up to 4 spots)", unit: "nos", unitCost: 380 },
   { id: "drv-3", name: "LED Driver (up to 3 spots)", unit: "nos", unitCost: 420 },
-  { id: "drv-gimbal", name: "Gimbal LED Driver", unit: "nos", unitCost: 400 },
   { id: "drv-profile", name: "Profile LED Driver", unit: "nos", unitCost: 560 },
   { id: "con-profile", name: "Profile Straight Connector", unit: "nos", unitCost: 90 },
   { id: "drv-strip", name: "Strip LED Driver", unit: "nos", unitCost: 600 },
@@ -46,115 +127,6 @@ export const ACCESSORIES: Accessory[] = [
   { id: "drv-track", name: "Magnetic Track Driver", unit: "nos", unitCost: 1450 },
   { id: "kit-canopy", name: "Ceiling Canopy Kit", unit: "nos", unitCost: 450 },
   { id: "kit-canopy-sm", name: "Pendant Canopy Kit", unit: "nos", unitCost: 300 },
-  { id: "lead-link", name: "Link Lead", unit: "nos", unitCost: 55 },
-];
-
-export const LIGHTING_SYSTEMS: LightingSystem[] = [
-  {
-    id: "cob-7",
-    name: "COB Spotlight 7W",
-    category: "Recessed",
-    unit: "nos",
-    unitCost: 520,
-    rules: [{ accessoryId: "drv-4", perUnits: 4 }],
-  },
-  {
-    id: "cob-12",
-    name: "COB Spotlight 12W",
-    category: "Recessed",
-    unit: "nos",
-    unitCost: 740,
-    rules: [{ accessoryId: "drv-3", perUnits: 3 }],
-  },
-  {
-    id: "gimbal-10",
-    name: "Gimbal Downlight 10W",
-    category: "Recessed",
-    unit: "nos",
-    unitCost: 690,
-    rules: [{ accessoryId: "drv-gimbal", perUnits: 4 }],
-  },
-  {
-    id: "profile-1m",
-    name: "Linear Profile Light (1 m)",
-    category: "Linear",
-    unit: "mtr",
-    unitCost: 680,
-    rules: [
-      { accessoryId: "con-profile", perUnits: 2 },
-      { accessoryId: "drv-profile", perUnits: 5 },
-    ],
-  },
-  {
-    id: "cove-1m",
-    name: "Cove COB Strip (1 m)",
-    category: "Linear",
-    unit: "mtr",
-    unitCost: 240,
-    rules: [
-      { accessoryId: "con-strip", perUnits: 3 },
-      { accessoryId: "drv-strip", perUnits: 5 },
-    ],
-  },
-  {
-    id: "track-1m",
-    name: "Magnetic Track (1 m)",
-    category: "Track",
-    unit: "mtr",
-    unitCost: 1250,
-    rules: [
-      { accessoryId: "con-track", perUnits: 2 },
-      { accessoryId: "drv-track", perUnits: 3 },
-    ],
-  },
-  {
-    id: "track-spot-6",
-    name: "Magnetic Track Spot 6W",
-    category: "Track",
-    unit: "nos",
-    unitCost: 640,
-    rules: [],
-  },
-  {
-    id: "panel-40",
-    name: "Panel Light 600×600 40W",
-    category: "Surface",
-    unit: "nos",
-    unitCost: 1180,
-    rules: [],
-  },
-  {
-    id: "sconce",
-    name: "Wall Sconce",
-    category: "Decorative",
-    unit: "nos",
-    unitCost: 1650,
-    rules: [],
-  },
-  {
-    id: "pendant",
-    name: "Pendant Light",
-    category: "Decorative",
-    unit: "nos",
-    unitCost: 2200,
-    rules: [{ accessoryId: "kit-canopy-sm", perUnits: 1 }],
-  },
-  {
-    id: "chandelier",
-    name: "Chandelier (Decorative)",
-    category: "Decorative",
-    unit: "nos",
-    unitCost: 8500,
-    rules: [{ accessoryId: "kit-canopy", perUnits: 1 }],
-  },
-  {
-    id: "undercab-30",
-    name: "Under-cabinet Bar (30 cm)",
-    category: "Task",
-    unit: "nos",
-    unitCost: 410,
-    rules: [{ accessoryId: "lead-link", perUnits: 2 }],
-  },
 ];
 
 const SYSTEM_BY_ID = new Map(LIGHTING_SYSTEMS.map((s) => [s.id, s]));

@@ -4,19 +4,14 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { BlueprintViewer } from "@/components/blueprint-viewer";
 import { WizardSteps } from "@/components/wizard-steps";
+import { LightingFilterPicker } from "@/components/lighting-filter-picker";
 import { Button, ButtonLink, Eyebrow } from "@/components/ui";
-import {
-  LIGHTING_SYSTEMS,
-  UNIT_LABEL,
-  getSystem,
-} from "@/lib/catalog";
+import { UNIT_LABEL, getSystem } from "@/lib/catalog";
 import { useDraft } from "@/lib/draft/context";
 import { money } from "@/lib/format";
 import { computeRoom } from "@/lib/quote";
 import { cx } from "@/lib/cx";
 import type { RoomLine } from "@/lib/types";
-
-const CATEGORIES = [...new Set(LIGHTING_SYSTEMS.map((s) => s.category))];
 
 function uid(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -150,26 +145,13 @@ export default function RoomLightingPage() {
                       key={line.id}
                       className="rounded-[var(--radius-card)] border border-hairline p-3"
                     >
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={line.systemId}
-                          onChange={(e) => setSystem(line.id, e.target.value)}
-                          className="min-w-0 flex-1 rounded-md border border-hairline bg-paper px-2 py-1.5 text-sm outline-none focus:border-gold"
-                        >
-                          <option value="">Select a system…</option>
-                          {CATEGORIES.map((cat) => (
-                            <optgroup key={cat} label={cat}>
-                              {LIGHTING_SYSTEMS.filter(
-                                (s) => s.category === cat,
-                              ).map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  {s.name} ({money(s.unitCost)}/
-                                  {UNIT_LABEL[s.unit]})
-                                </option>
-                              ))}
-                            </optgroup>
-                          ))}
-                        </select>
+                      <div className="flex items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <LightingFilterPicker
+                            value={line.systemId}
+                            onChange={(id) => setSystem(line.id, id)}
+                          />
+                        </div>
                         <button
                           type="button"
                           onClick={() => removeLine(line.id)}
