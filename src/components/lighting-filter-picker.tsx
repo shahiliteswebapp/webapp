@@ -21,7 +21,6 @@ import {
   decorativeTagOptions,
   filterDecorative,
   filterFunctional,
-  functionalOptions,
   type Branch,
   type DecorativePicks,
   type FunctionalPicks,
@@ -221,10 +220,8 @@ function FunctionalFlow({
 
   const controls = picks.automatic ? availableControls(candidates) : [];
   const interfaces = picks.automatic ? availableInterfaces(candidates, picks.control) : [];
-  const sizes = functionalOptions(candidates, "size");
-  const finishes = functionalOptions(candidates, "finish");
-  const cutouts = functionalOptions(candidates, "cutout");
-  const watts = functionalOptions(candidates, "watt");
+  // Size / finish / cutout / watt are not filters: they show as specs under
+  // the product photo (light-details.tsx).
 
   const filtered = candidates.filter((s) => matchesQuery(s, query));
   const variant = picks.automatic
@@ -323,54 +320,6 @@ function FunctionalFlow({
           </FieldRow>
         </>
       )}
-
-      <div className="border-t border-hairline pt-2">
-        <p className="pb-1 text-[11px] font-medium uppercase tracking-wide text-faint">
-          Size &middot; Finish &middot; Cutout &middot; Watt
-        </p>
-        <div className="space-y-1.5">
-          <FieldRow label="Size">
-            <select className={selectClass} value={picks.size ?? ""} onChange={(e) => set("size", e.target.value || undefined)}>
-              <option value="">Any ({sizes.length})</option>
-              {sizes.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
-          <FieldRow label="Finish">
-            <select className={selectClass} value={picks.finish ?? ""} onChange={(e) => set("finish", e.target.value || undefined)}>
-              <option value="">Any ({finishes.length})</option>
-              {finishes.map((f) => (
-                <option key={f} value={f}>
-                  {f}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
-          <FieldRow label="Cutout">
-            <select className={selectClass} value={picks.cutout ?? ""} onChange={(e) => set("cutout", e.target.value || undefined)}>
-              <option value="">Any ({cutouts.length})</option>
-              {cutouts.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
-          <FieldRow label="Watt">
-            <select className={selectClass} value={picks.watt ?? ""} onChange={(e) => set("watt", e.target.value || undefined)}>
-              <option value="">Any ({watts.length})</option>
-              {watts.map((w) => (
-                <option key={w} value={w}>
-                  {w}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
-        </div>
-      </div>
 
       <ResultList
         candidates={filtered}
