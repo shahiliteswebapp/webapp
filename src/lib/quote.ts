@@ -1,4 +1,11 @@
-import { getAccessory, getSystem, UNIT_LABEL, type Unit } from "./catalog";
+import {
+  getAccessory,
+  getSystem,
+  unitPriceFor,
+  variantLabel,
+  UNIT_LABEL,
+  type Unit,
+} from "./catalog";
 import { QUOTE } from "./config";
 import { round2 } from "./format";
 import type { DraftRoom } from "./types";
@@ -10,6 +17,8 @@ import type { DraftRoom } from "./types";
  */
 
 export interface ComputedSystemLine {
+  /** systemId + variant + price: unique within a room */
+  key: string;
   systemId: string;
   name: string;
   unit: Unit;
@@ -48,11 +57,24 @@ export interface ComputedQuote {
 }
 
 export function computeRoom(room: DraftRoom): ComputedRoom {
-  // Aggregate line quantities by system (a system can be added on multiple lines).
+  // Aggregate line quantities by system + variant + price (the same system can
+  // be added on several lines; different automation variants stay separate).
+  const groups = new Map<
+    string,
+    { systemId: string; label: string; unitCost: number; qty: number }
+  >();
   const qtyBySystem = new Map<string, number>();
   for (const line of room.lines) {
     const qty = Number(line.qty);
     if (!line.systemId || !Number.isFinite(qty) || qty <= 0) continue;
+    const sys = getSystem(line.systemId);
+    if (!sys) continue;
+    const unitCost = unitPriceFor(sys, line);
+    const label = variantLabel(line);
+    const key = `${line.systemId}|${label}|${unitCost}`;
+    const g = groups.get(key) ?? { systemId: line.systemId, label, unitCost, qty: 0 };
+    g.qty += qty;
+    groups.set(key, g);
     qtyBySystem.set(line.systemId, (qtyBySystem.get(line.systemId) ?? 0) + qty);
   }
 
@@ -62,20 +84,24 @@ export function computeRoom(room: DraftRoom): ComputedRoom {
     { qty: number; unitCost: number; name: string; from: Set<string> }
   >();
 
+  for (const [key, g] of groups) {
+    const sys = getSystem(g.systemId)!;
+    systems.push({
+      key,
+      systemId: g.systemId,
+      name: g.label ? `${sys.name} (${g.label})` : sys.name,
+      unit: sys.unit,
+      unitLabel: UNIT_LABEL[sys.unit],
+      qty: g.qty,
+      unitCost: g.unitCost,
+      total: round2(g.unitCost * g.qty),
+    });
+  }
+
+  // Accessories are per system, regardless of variant.
   for (const [systemId, qty] of qtyBySystem) {
     const sys = getSystem(systemId);
     if (!sys) continue;
-
-    systems.push({
-      systemId,
-      name: sys.name,
-      unit: sys.unit,
-      unitLabel: UNIT_LABEL[sys.unit],
-      qty,
-      unitCost: sys.unitCost,
-      total: round2(sys.unitCost * qty),
-    });
-
     for (const rule of sys.rules) {
       const acc = getAccessory(rule.accessoryId);
       if (!acc || rule.perUnits <= 0) continue;

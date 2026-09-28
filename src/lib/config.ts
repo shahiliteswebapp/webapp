@@ -13,7 +13,7 @@ export const COMPANY = {
     "[City, State, PIN]",
   ],
   phones: ["[Phone number]"],
-  email: "hanabiradesigns@gmail.com",
+  email: "shahiliteswebapp@gmail.com",
   // No website for now (per client).
   gstin: "[GSTIN]",
 } as const;
@@ -37,7 +37,7 @@ export const QUOTE = {
  */
 export const EMAIL = {
   senderName: "Shahi Lites",
-  senderEmail: "hanabiradesigns@gmail.com",
+  senderEmail: "shahiliteswebapp@gmail.com",
 } as const;
 
 export const DISCLAIMER =

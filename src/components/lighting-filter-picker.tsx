@@ -1,21 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import {
   DECOR_TYPES,
-  DECOR_STYLES,
   LAYER_LABEL,
   LIGHTING_SYSTEMS,
   UNIT_LABEL,
   getSystem,
+  unitPriceFor,
+  variantLabel,
+  type ControlMode,
   type DecorativeSystem,
   type FunctionalSystem,
+  type InterfaceTag,
 } from "@/lib/catalog";
 import {
   LAYER_OPTIONS,
   availableControls,
   availableInterfaces,
-  decorativeOptions,
+  decorativeTagOptions,
   filterDecorative,
   filterFunctional,
   functionalOptions,
@@ -38,47 +41,62 @@ function FieldRow({ label, children }: { label: string; children: React.ReactNod
   );
 }
 
-function priceForFunctional(sys: FunctionalSystem, picks: FunctionalPicks): number {
-  if (picks.automatic && (picks.interfaceTag || picks.control)) {
-    const match = sys.interfaceOptions.find(
-      (io) =>
-        (!picks.interfaceTag || io.interface === picks.interfaceTag) &&
-        (!picks.control || io.control === picks.control),
-    );
-    if (match?.price != null) return match.price;
-  }
-  return sys.unitCost;
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+export interface LinePick {
+  systemId: string;
+  interfaceTag?: InterfaceTag;
+  control?: ControlMode;
 }
 
 export function LightingFilterPicker({
   value,
   onChange,
+  onPreview,
 }: {
-  value: string;
-  onChange: (systemId: string) => void;
+  value: LinePick & { unitPrice?: number };
+  onChange: (pick: LinePick) => void;
+  /** candidate under the pointer / focus while browsing, null when none */
+  onPreview?: (systemId: string | null) => void;
 }) {
-  const selected = value ? getSystem(value) : undefined;
-  const [editing, setEditing] = useState(!value);
+  const selected = value.systemId ? getSystem(value.systemId) : undefined;
+  const [editing, setEditingState] = useState(!value.systemId);
   const [branch, setBranch] = useState<Branch>("functional");
   const [fPicks, setFPicks] = useState<Partial<FunctionalPicks>>({});
   const [dPicks, setDPicks] = useState<Partial<DecorativePicks>>({});
   const [query, setQuery] = useState("");
+
+  const setEditing = (v: boolean) => {
+    setEditingState(v);
+    if (!v) onPreview?.(null);
+  };
 
   const fCandidates = useMemo(
     () => filterFunctional(LIGHTING_SYSTEMS, fPicks),
     [fPicks],
   );
   const dCandidates = useMemo(
-    () => filterDecorative(LIGHTING_SYSTEMS, dPicks),
+    // Items with catalogue photos first (stable sort keeps catalogue order).
+    () =>
+      filterDecorative(LIGHTING_SYSTEMS, dPicks).sort(
+        (x, y) => Number(y.images.length > 0) - Number(x.images.length > 0),
+      ),
     [dPicks],
   );
 
   if (selected && !editing) {
+    const variant = variantLabel(value);
+    const price = unitPriceFor(selected, value);
     return (
       <div className="flex items-center gap-2 rounded-md border border-hairline bg-panel/40 px-2 py-1.5 text-sm">
         <span className="min-w-0 flex-1 truncate">
-          {selected.name}{" "}
-          <span className="text-faint">({money(selected.unitCost)}/{UNIT_LABEL[selected.unit]})</span>
+          {selected.name}
+          {variant && <span className="text-muted"> · {variant}</span>}{" "}
+          <span className="text-faint">
+            ({price > 0 ? money(price) : "no price"}/{UNIT_LABEL[selected.unit]})
+          </span>
         </span>
         <button
           type="button"
@@ -98,10 +116,20 @@ export function LightingFilterPicker({
     setFPicks({});
     setDPicks({});
     setQuery("");
+    onPreview?.(null);
   };
 
-  const pick = (id: string) => {
-    onChange(id);
+  const pickFunctional = (id: string) => {
+    onChange({
+      systemId: id,
+      interfaceTag: fPicks.automatic ? fPicks.interfaceTag : undefined,
+      control: fPicks.automatic ? fPicks.control : undefined,
+    });
+    setEditing(false);
+  };
+
+  const pickDecorative = (id: string) => {
+    onChange({ systemId: id });
     setEditing(false);
   };
 
@@ -134,7 +162,8 @@ export function LightingFilterPicker({
           candidates={fCandidates}
           query={query}
           setQuery={setQuery}
-          onPick={pick}
+          onPick={pickFunctional}
+          onPreview={onPreview}
         />
       ) : (
         <DecorativeFlow
@@ -143,11 +172,12 @@ export function LightingFilterPicker({
           candidates={dCandidates}
           query={query}
           setQuery={setQuery}
-          onPick={pick}
+          onPick={pickDecorative}
+          onPreview={onPreview}
         />
       )}
 
-      {value && (
+      {value.systemId && (
         <button
           type="button"
           onClick={() => setEditing(false)}
@@ -160,6 +190,11 @@ export function LightingFilterPicker({
   );
 }
 
+function matchesQuery(s: { name: string; sourceCode: string }, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  return !q || s.name.toLowerCase().includes(q) || s.sourceCode.toLowerCase().includes(q);
+}
+
 /* --------------------------------- Functional --------------------------------- */
 
 function FunctionalFlow({
@@ -169,16 +204,20 @@ function FunctionalFlow({
   query,
   setQuery,
   onPick,
+  onPreview,
 }: {
   picks: Partial<FunctionalPicks>;
-  setPicks: (p: Partial<FunctionalPicks>) => void;
+  setPicks: Dispatch<SetStateAction<Partial<FunctionalPicks>>>;
   candidates: FunctionalSystem[];
   query: string;
   setQuery: (q: string) => void;
   onPick: (id: string) => void;
+  onPreview?: (id: string | null) => void;
 }) {
+  // Functional updates: a handler may change several fields, and spreading a
+  // stale `picks` would keep only the last one.
   const set = <K extends keyof FunctionalPicks>(key: K, val: FunctionalPicks[K] | undefined) =>
-    setPicks({ ...picks, [key]: val });
+    setPicks((prev) => ({ ...prev, [key]: val }));
 
   const controls = picks.automatic ? availableControls(candidates) : [];
   const interfaces = picks.automatic ? availableInterfaces(candidates, picks.control) : [];
@@ -187,13 +226,10 @@ function FunctionalFlow({
   const cutouts = functionalOptions(candidates, "cutout");
   const watts = functionalOptions(candidates, "watt");
 
-  const filtered = query
-    ? candidates.filter(
-        (s) =>
-          s.name.toLowerCase().includes(query.toLowerCase()) ||
-          s.sourceCode.toLowerCase().includes(query.toLowerCase()),
-      )
-    : candidates;
+  const filtered = candidates.filter((s) => matchesQuery(s, query));
+  const variant = picks.automatic
+    ? { interfaceTag: picks.interfaceTag, control: picks.control }
+    : {};
 
   return (
     <div className="space-y-2">
@@ -201,7 +237,9 @@ function FunctionalFlow({
         <select
           className={selectClass}
           value={picks.layer ?? ""}
-          onChange={(e) => set("layer", e.target.value ? (Number(e.target.value) as FunctionalPicks["layer"]) : undefined)}
+          onChange={(e) =>
+            set("layer", e.target.value ? (Number(e.target.value) as FunctionalPicks["layer"]) : undefined)
+          }
         >
           <option value="">Any</option>
           {LAYER_OPTIONS.map((l) => (
@@ -230,9 +268,12 @@ function FunctionalFlow({
           value={picks.automatic === undefined ? "" : picks.automatic ? "yes" : "no"}
           onChange={(e) => {
             const v = e.target.value;
-            set("automatic", v === "" ? undefined : v === "yes");
-            set("control", undefined);
-            set("interfaceTag", undefined);
+            setPicks((prev) => ({
+              ...prev,
+              automatic: v === "" ? undefined : v === "yes",
+              control: undefined,
+              interfaceTag: undefined,
+            }));
           }}
         >
           <option value="">Any</option>
@@ -247,7 +288,13 @@ function FunctionalFlow({
             <select
               className={selectClass}
               value={picks.control ?? ""}
-              onChange={(e) => set("control", (e.target.value || undefined) as FunctionalPicks["control"])}
+              onChange={(e) =>
+                setPicks((prev) => ({
+                  ...prev,
+                  control: (e.target.value || undefined) as FunctionalPicks["control"],
+                  interfaceTag: undefined,
+                }))
+              }
             >
               <option value="">Any</option>
               {controls.map((c) => (
@@ -262,7 +309,9 @@ function FunctionalFlow({
             <select
               className={selectClass}
               value={picks.interfaceTag ?? ""}
-              onChange={(e) => set("interfaceTag", (e.target.value || undefined) as FunctionalPicks["interfaceTag"])}
+              onChange={(e) =>
+                set("interfaceTag", (e.target.value || undefined) as FunctionalPicks["interfaceTag"])
+              }
             >
               <option value="">Any</option>
               {interfaces.map((i) => (
@@ -329,7 +378,8 @@ function FunctionalFlow({
         query={query}
         setQuery={setQuery}
         onPick={onPick}
-        priceFor={(s) => priceForFunctional(s, picks as FunctionalPicks)}
+        onPreview={onPreview}
+        priceFor={(s) => unitPriceFor(s, variant)}
       />
     </div>
   );
@@ -344,29 +394,24 @@ function DecorativeFlow({
   query,
   setQuery,
   onPick,
+  onPreview,
 }: {
   picks: Partial<DecorativePicks>;
-  setPicks: (p: Partial<DecorativePicks>) => void;
+  setPicks: Dispatch<SetStateAction<Partial<DecorativePicks>>>;
   candidates: DecorativeSystem[];
   query: string;
   setQuery: (q: string) => void;
   onPick: (id: string) => void;
+  onPreview?: (id: string | null) => void;
 }) {
   const set = <K extends keyof DecorativePicks>(key: K, val: DecorativePicks[K] | undefined) =>
-    setPicks({ ...picks, [key]: val });
+    setPicks((prev) => ({ ...prev, [key]: val }));
 
-  const mountings = decorativeOptions(candidates, "mounting");
-  const styles = decorativeOptions(candidates, "style");
+  const mountings = decorativeTagOptions(candidates, "mountingTags");
+  const styles = decorativeTagOptions(candidates, "styleTags");
   const showIndoorOutdoor = picks.decorType === "Wall light";
-  const showMounting = !showIndoorOutdoor && mountings.length > 0;
 
-  const filtered = query
-    ? candidates.filter(
-        (s) =>
-          s.name.toLowerCase().includes(query.toLowerCase()) ||
-          s.sourceCode.toLowerCase().includes(query.toLowerCase()),
-      )
-    : candidates;
+  const filtered = candidates.filter((s) => matchesQuery(s, query));
 
   return (
     <div className="space-y-2">
@@ -375,9 +420,13 @@ function DecorativeFlow({
           className={selectClass}
           value={picks.decorType ?? ""}
           onChange={(e) => {
-            set("decorType", e.target.value || undefined);
-            set("mounting", undefined);
-            set("indoorOutdoor", undefined);
+            const v = e.target.value || undefined;
+            setPicks((prev) => ({
+              ...prev,
+              decorType: v,
+              mounting: undefined,
+              indoorOutdoor: undefined,
+            }));
           }}
         >
           <option value="">Any</option>
@@ -394,7 +443,9 @@ function DecorativeFlow({
           <select
             className={selectClass}
             value={picks.indoorOutdoor ?? ""}
-            onChange={(e) => set("indoorOutdoor", (e.target.value || undefined) as DecorativePicks["indoorOutdoor"])}
+            onChange={(e) =>
+              set("indoorOutdoor", (e.target.value || undefined) as DecorativePicks["indoorOutdoor"])
+            }
           >
             <option value="">Any</option>
             <option value="indoor">Indoor</option>
@@ -403,7 +454,7 @@ function DecorativeFlow({
         </FieldRow>
       )}
 
-      {showMounting && (
+      {(mountings.length > 0 || picks.mounting) && (
         <FieldRow label="Mounting">
           <select className={selectClass} value={picks.mounting ?? ""} onChange={(e) => set("mounting", e.target.value || undefined)}>
             <option value="">Any</option>
@@ -416,22 +467,23 @@ function DecorativeFlow({
         </FieldRow>
       )}
 
-      {styles.length > 0 && (
+      {(styles.length > 0 || picks.style) && (
         <FieldRow label="Style">
           <select className={selectClass} value={picks.style ?? ""} onChange={(e) => set("style", e.target.value || undefined)}>
             <option value="">Any</option>
             {styles.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {capitalize(s)}
               </option>
             ))}
           </select>
         </FieldRow>
       )}
 
-      {candidates.length > 0 && candidates.every((c) => c.unitCost === 0) && (
+      {candidates.some((c) => c.unitCost === 0) && (
         <p className="text-[11px] text-faint">
-          No price on file for these yet — client hasn&rsquo;t supplied a priced decorative sheet.
+          Most decorative items have no catalogue price yet. Enter the rate on the line after
+          picking one.
         </p>
       )}
 
@@ -441,6 +493,7 @@ function DecorativeFlow({
         query={query}
         setQuery={setQuery}
         onPick={onPick}
+        onPreview={onPreview}
         priceFor={(s) => s.unitCost}
       />
     </div>
@@ -449,12 +502,15 @@ function DecorativeFlow({
 
 /* ----------------------------------- Results ----------------------------------- */
 
+const MAX_RESULTS = 300;
+
 function ResultList<T extends { id: string; name: string; unit: string }>({
   candidates,
   total,
   query,
   setQuery,
   onPick,
+  onPreview,
   priceFor,
 }: {
   candidates: T[];
@@ -462,41 +518,60 @@ function ResultList<T extends { id: string; name: string; unit: string }>({
   query: string;
   setQuery: (q: string) => void;
   onPick: (id: string) => void;
+  onPreview?: (id: string | null) => void;
   priceFor: (s: T) => number;
 }) {
   return (
     <div className="border-t border-hairline pt-2">
-      <div className="flex items-center justify-between pb-1">
+      <div className="flex items-center justify-between gap-2 pb-1">
         <p className="text-[11px] font-medium uppercase tracking-wide text-faint">
-          Matches ({total})
+          Matches ({candidates.length}
+          {candidates.length !== total ? ` of ${total}` : ""})
         </p>
         {total > 8 && (
           <input
-            type="text"
+            type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search code or name…"
-            className="w-36 rounded-md border border-hairline bg-paper px-2 py-1 text-xs outline-none focus:border-gold"
+            placeholder="Search code or name"
+            className="w-40 rounded-md border border-hairline bg-paper px-2 py-1 text-xs outline-none focus:border-gold"
           />
         )}
       </div>
       {candidates.length === 0 ? (
         <p className="py-2 text-center text-xs text-faint">No systems match these filters.</p>
       ) : (
-        <ul className="max-h-56 divide-y divide-hairline overflow-y-auto rounded-md border border-hairline bg-paper">
-          {candidates.slice(0, 200).map((s) => (
-            <li key={s.id}>
-              <button
-                type="button"
-                onClick={() => onPick(s.id)}
-                className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-xs hover:bg-gold-tint"
-              >
-                <span className="min-w-0 truncate">{s.name}</span>
-                <span className="shrink-0 tabular-nums text-faint">{money(priceFor(s))}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul
+            onMouseLeave={() => onPreview?.(null)}
+            className="max-h-72 divide-y divide-hairline overflow-y-auto rounded-md border border-hairline bg-paper"
+          >
+            {candidates.slice(0, MAX_RESULTS).map((s) => {
+              const price = priceFor(s);
+              return (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    onClick={() => onPick(s.id)}
+                    onMouseEnter={() => onPreview?.(s.id)}
+                    onFocus={() => onPreview?.(s.id)}
+                    className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-xs hover:bg-gold-tint focus:bg-gold-tint focus:outline-none"
+                  >
+                    <span className="min-w-0 truncate">{s.name}</span>
+                    <span className="shrink-0 tabular-nums text-faint">
+                      {price > 0 ? money(price) : "No price"}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {candidates.length > MAX_RESULTS && (
+            <p className="pt-1 text-[11px] text-faint">
+              Showing the first {MAX_RESULTS}. Narrow the filters or search to see the rest.
+            </p>
+          )}
+        </>
       )}
     </div>
   );

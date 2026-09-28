@@ -293,7 +293,7 @@ function LineTable({ room }: { room: ComputedRoom }) {
       </View>
 
       {room.systems.map((l) => (
-        <View style={s.tRow} key={`sys-${l.systemId}`} wrap={false}>
+        <View style={s.tRow} key={`sys-${l.key}`} wrap={false}>
           <Text style={s.cDesc}>{l.name}</Text>
           <Text style={s.cQty}>{l.qty}</Text>
           <Text style={s.cUnit}>{l.unitLabel}</Text>

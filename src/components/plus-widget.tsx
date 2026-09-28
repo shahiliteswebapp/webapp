@@ -22,10 +22,12 @@ export function PlusWidget({ isSuperadmin = false }: { isSuperadmin?: boolean })
   const pathname = usePathname();
   const items = isSuperadmin ? [...ITEMS, ...SUPERADMIN_ITEMS] : ITEMS;
 
-  // Close on route change
-  useEffect(() => {
+  // Close on route change (reset during render, not in an effect).
+  const [openedAt, setOpenedAt] = useState(pathname);
+  if (openedAt !== pathname) {
+    setOpenedAt(pathname);
     setOpen(false);
-  }, [pathname]);
+  }
 
   // Close on outside click / Esc
   useEffect(() => {

@@ -110,7 +110,7 @@ export default function SummaryPage() {
                   <ul className="mt-3 space-y-1 text-sm">
                     {room.systems.map((s) => (
                       <li
-                        key={s.systemId}
+                        key={s.key}
                         className="flex justify-between gap-3 text-muted"
                       >
                         <span className="min-w-0 truncate">

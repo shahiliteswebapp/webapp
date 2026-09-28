@@ -88,28 +88,34 @@ export interface FunctionalSystem extends BaseSystem {
 
 export const DECOR_TYPES = [
   "Chandelier",
-  "Wall light",
   "Hanging light",
-  "Bed side light",
+  "Ceiling light",
+  "Wall light",
   "Mirror light",
   "Picture light",
+  "Bed side light",
+  "Table / floor lamp",
 ] as const;
 export type DecorType = (typeof DECOR_TYPES)[number];
 
-export const DECOR_STYLES = ["modern", "classical", "rustic"] as const;
+export const DECOR_STYLES = ["modern", "classical", "crystal"] as const;
 export type DecorStyle = (typeof DECOR_STYLES)[number];
 
 export interface DecorativeSystem extends BaseSystem {
   kind: "decorative";
   decorType: string;
-  mounting: string | null; // e.g. ceiling mounted / suspended / staircase / double height (chandeliers)
-  style: string | null; // modern / classical / rustic
+  mounting: string | null; // display text, e.g. "Hanging / Staircase"
+  mountingTags: string[]; // filterable, from the client's chandeliers chart
+  style: string | null; // display text, e.g. "modern / classical"
+  styleTags: string[]; // filterable: modern / classical / crystal
   indoorOutdoor: "indoor" | "outdoor" | null;
   size: string | null;
   finish: string | null;
   material: string | null;
   lamp: string | null;
   sku: string | null;
+  /** product photo file names (webp), served from CATALOG_IMAGE_BASE */
+  images: string[];
 }
 
 export type LightingSystem = FunctionalSystem | DecorativeSystem;
@@ -138,6 +144,55 @@ export function getSystem(id: string): LightingSystem | undefined {
 
 export function getAccessory(id: string): Accessory | undefined {
   return ACCESSORY_BY_ID.get(id);
+}
+
+/*
+ * Product photos live in Cloudflare R2 (bucket "shahi-lites-catalog"), uploaded
+ * by scripts/upload-catalog-images.mjs. NEXT_PUBLIC_CATALOG_IMAGE_BASE is the
+ * bucket's public URL; without it, photos are served from public/catalog/
+ * (local dev copy, gitignored).
+ */
+const CATALOG_IMAGE_BASE = (
+  process.env.NEXT_PUBLIC_CATALOG_IMAGE_BASE || "/catalog"
+).replace(/\/+$/, "");
+
+export function catalogImageUrl(file: string): string {
+  return `${CATALOG_IMAGE_BASE}/${encodeURIComponent(file)}`;
+}
+
+export function systemImages(sys: LightingSystem): string[] {
+  return sys.kind === "decorative" ? (sys.images ?? []).map(catalogImageUrl) : [];
+}
+
+/**
+ * Unit price for one line: the chosen automation variant's price when it has
+ * one, else the catalogue price, else (unpriced decorative items only) the
+ * rate the employee typed in.
+ */
+export function unitPriceFor(
+  sys: LightingSystem,
+  pick: { interfaceTag?: InterfaceTag; control?: ControlMode; unitPrice?: number },
+): number {
+  if (pick.interfaceTag || pick.control) {
+    const match = sys.interfaceOptions.find(
+      (io) =>
+        (!pick.interfaceTag || io.interface === pick.interfaceTag) &&
+        (!pick.control || io.control === pick.control),
+    );
+    if (match?.price != null) return match.price;
+  }
+  if (sys.unitCost > 0) return sys.unitCost;
+  const manual = Number(pick.unitPrice);
+  return Number.isFinite(manual) && manual > 0 ? manual : 0;
+}
+
+export function variantLabel(pick: { interfaceTag?: InterfaceTag; control?: ControlMode }): string {
+  const parts: string[] = [];
+  if (pick.interfaceTag && pick.interfaceTag !== "DIMMABLE" && pick.interfaceTag !== "TUNABLE") {
+    parts.push(pick.interfaceTag);
+  }
+  if (pick.control) parts.push(pick.control === "tunable" ? "Dimmable + Tunable" : "Dimmable");
+  return parts.join(" ");
 }
 
 export const UNIT_LABEL: Record<Unit, string> = { nos: "nos", mtr: "m" };

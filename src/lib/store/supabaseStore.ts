@@ -17,6 +17,19 @@ import type {
  * once (and again after updates) in the Supabase SQL editor.
  */
 
+/*
+ * supabase-js returns errors as plain objects. Thrown as-is they reach the
+ * Next error boundary as "[object Object]" with no stack, so wrap them in a
+ * real Error that keeps the Postgres code / message for the server logs.
+ */
+function dbError(e: { message?: string; code?: string; details?: string | null; hint?: string | null }): Error {
+  const parts = [e.message || "Database request failed"];
+  if (e.code) parts.push(`code ${e.code}`);
+  if (e.details) parts.push(e.details);
+  if (e.hint) parts.push(`hint: ${e.hint}`);
+  return new Error(`Supabase: ${parts.join(" | ")}`, { cause: e });
+}
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -112,7 +125,7 @@ export async function listQuotations(
   if (filter.toISO) q = q.lte("created_at", filter.toISO);
 
   const { data, error } = await q;
-  if (error) throw error;
+  if (error) throw dbError(error);
   return (data as QuotationRow[]).map(mapRecord);
 }
 
@@ -125,7 +138,7 @@ export async function getQuotation(
     .select("*")
     .eq(column, numberOrId)
     .maybeSingle();
-  if (error) throw error;
+  if (error) throw dbError(error);
   return data ? mapRecord(data as QuotationRow) : null;
 }
 
@@ -137,7 +150,7 @@ export async function listEvents(
     .select("*")
     .eq("quotation_id", quotationId)
     .order("at", { ascending: true });
-  if (error) throw error;
+  if (error) throw dbError(error);
   return (data as EventRow[]).map(mapEvent);
 }
 
@@ -150,7 +163,7 @@ export async function createQuotation(
     p_total_amount: input.totalAmount,
     p_status: input.status,
   });
-  if (error) throw error;
+  if (error) throw dbError(error);
   const row = (Array.isArray(data) ? data[0] : data) as QuotationRow;
   return mapRecord(row);
 }
@@ -178,7 +191,7 @@ export async function setStatus(
     .select("*")
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) throw dbError(error);
   if (!data) return null; // not found, or already decided
 
   const row = data as QuotationRow;
@@ -189,7 +202,7 @@ export async function setStatus(
     to_status: to,
     note: note ?? null,
   });
-  if (evErr) throw evErr;
+  if (evErr) throw dbError(evErr);
 
   return mapRecord(row);
 }
@@ -202,7 +215,7 @@ export async function isAllowed(email: string): Promise<boolean> {
     .select("status")
     .eq("email", email.toLowerCase())
     .maybeSingle();
-  if (error) throw error;
+  if (error) throw dbError(error);
   return data?.status === "active";
 }
 
@@ -211,7 +224,7 @@ export async function touchSignIn(email: string, name: string): Promise<void> {
     p_email: email.toLowerCase(),
     p_name: name || null,
   });
-  if (error) throw error;
+  if (error) throw dbError(error);
 }
 
 export async function listAccess(): Promise<AccessEntry[]> {
@@ -219,7 +232,7 @@ export async function listAccess(): Promise<AccessEntry[]> {
     .from("app_users")
     .select("*")
     .order("added_at", { ascending: false });
-  if (error) throw error;
+  if (error) throw dbError(error);
   return (data as AccessRow[]).map(mapAccess);
 }
 
@@ -248,7 +261,7 @@ export async function addAccess(
       .eq("email", e)
       .select("*")
       .single();
-    if (error) throw error;
+    if (error) throw dbError(error);
     return mapAccess(data as AccessRow);
   }
 
@@ -263,7 +276,7 @@ export async function addAccess(
     })
     .select("*")
     .single();
-  if (error) throw error;
+  if (error) throw dbError(error);
   return mapAccess(data as AccessRow);
 }
 
@@ -281,7 +294,7 @@ export async function removeAccess(
     .eq("email", email.trim().toLowerCase())
     .select("*")
     .maybeSingle();
-  if (error) throw error;
+  if (error) throw dbError(error);
   return data ? mapAccess(data as AccessRow) : null;
 }
 
@@ -296,6 +309,6 @@ export async function restoreAccess(
     .eq("email", email.trim().toLowerCase())
     .select("*")
     .maybeSingle();
-  if (error) throw error;
+  if (error) throw dbError(error);
   return data ? mapAccess(data as AccessRow) : null;
 }

@@ -1,12 +1,13 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BlueprintViewer } from "@/components/blueprint-viewer";
 import { WizardSteps } from "@/components/wizard-steps";
-import { LightingFilterPicker } from "@/components/lighting-filter-picker";
+import { LightDetails } from "@/components/light-details";
+import { LightingFilterPicker, type LinePick } from "@/components/lighting-filter-picker";
 import { Button, ButtonLink, Eyebrow } from "@/components/ui";
-import { UNIT_LABEL, getSystem } from "@/lib/catalog";
+import { UNIT_LABEL, getSystem, unitPriceFor, variantLabel } from "@/lib/catalog";
 import { useDraft } from "@/lib/draft/context";
 import { money } from "@/lib/format";
 import { computeRoom } from "@/lib/quote";
@@ -23,6 +24,9 @@ export default function RoomLightingPage() {
   const { roomId } = useParams<{ roomId: string }>();
   const router = useRouter();
   const { loaded, draft, setRoomLines } = useDraft();
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [activeLineId, setActiveLineId] = useState<string | null>(null);
+  const detailRefs = useRef(new Map<string, HTMLDivElement>());
 
   useEffect(() => {
     if (!loaded) return;
@@ -38,6 +42,22 @@ export default function RoomLightingPage() {
       router.replace(`/new/rooms/${draft.rooms[0].id}`);
     }
   }, [loaded, draft, roomId, router]);
+
+  // Room changed: drop per-room UI state (reset during render, not in an effect).
+  const [stateRoom, setStateRoom] = useState(roomId);
+  if (stateRoom !== roomId) {
+    setStateRoom(roomId);
+    setPreviewId(null);
+    setActiveLineId(null);
+  }
+
+  // Keep the active line's detail card in view.
+  useEffect(() => {
+    if (!activeLineId) return;
+    detailRefs.current
+      .get(activeLineId)
+      ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [activeLineId]);
 
   if (!loaded || !draft?.blueprint || draft.rooms.length === 0) {
     return (
@@ -57,19 +77,40 @@ export default function RoomLightingPage() {
   const lines = room.lines;
   const computed = computeRoom(room);
   const isLast = index === rooms.length - 1;
+  const previewSys = previewId ? getSystem(previewId) : undefined;
+  const pickedLines = lines.filter((l) => getSystem(l.systemId));
 
   const update = (next: RoomLine[]) => setRoomLines(room.id, next);
-  const addLine = () =>
-    update([...lines, { id: uid(), systemId: "", qty: 1 }]);
-  const setSystem = (id: string, systemId: string) =>
-    update(lines.map((l) => (l.id === id ? { ...l, systemId } : l)));
-  const setQty = (id: string, qty: number) =>
-    update(lines.map((l) => (l.id === id ? { ...l, qty } : l)));
-  const removeLine = (id: string) =>
+  const addLine = () => {
+    const id = uid();
+    update([...lines, { id, systemId: "", qty: 1 }]);
+    setActiveLineId(id);
+  };
+  const setPick = (id: string, pick: LinePick) =>
+    update(
+      lines.map((l) =>
+        l.id === id
+          ? {
+              id: l.id,
+              qty: l.qty,
+              systemId: pick.systemId,
+              interfaceTag: pick.interfaceTag,
+              control: pick.control,
+              // A typed-in rate belongs to the old system; keep it only if unchanged.
+              unitPrice: l.systemId === pick.systemId ? l.unitPrice : undefined,
+            }
+          : l,
+      ),
+    );
+  const patchLine = (id: string, patch: Partial<RoomLine>) =>
+    update(lines.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  const removeLine = (id: string) => {
     update(lines.filter((l) => l.id !== id));
+    if (activeLineId === id) setActiveLineId(null);
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 xl:relative xl:left-1/2 xl:w-[min(96rem,calc(100vw-4rem))] xl:-translate-x-1/2">
       <div className="border-b border-hairline pb-5">
         <Eyebrow>Start New</Eyebrow>
         <h1 className="font-display text-4xl text-ink-deep">Lighting</h1>
@@ -78,8 +119,8 @@ export default function RoomLightingPage() {
         </div>
       </div>
 
-      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_420px]">
-        {/* Blueprint */}
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_400px] xl:grid-cols-[minmax(0,1fr)_400px_340px]">
+        {/* Left: blueprint */}
         <div className="h-[50vh] min-w-0 lg:sticky lg:top-24 lg:h-[calc(100dvh-14rem)]">
           <BlueprintViewer
             src={draft.blueprint.previewDataUrl}
@@ -87,7 +128,7 @@ export default function RoomLightingPage() {
           />
         </div>
 
-        {/* Lighting editor */}
+        {/* Middle: room + lighting editor */}
         <div className="flex min-w-0 flex-col gap-5">
           {/* Room switcher */}
           <div className="flex items-center gap-2">
@@ -139,17 +180,26 @@ export default function RoomLightingPage() {
               <ul className="space-y-2">
                 {lines.map((line) => {
                   const sys = getSystem(line.systemId);
-                  const lineTotal = sys ? sys.unitCost * (line.qty || 0) : 0;
+                  const unit = sys ? unitPriceFor(sys, line) : 0;
+                  const needsRate =
+                    !!sys && sys.unitCost <= 0 && unitPriceFor(sys, { ...line, unitPrice: 0 }) <= 0;
+                  const lineTotal = unit * (line.qty || 0);
                   return (
                     <li
                       key={line.id}
-                      className="rounded-[var(--radius-card)] border border-hairline p-3"
+                      onClickCapture={() => setActiveLineId(line.id)}
+                      onFocusCapture={() => setActiveLineId(line.id)}
+                      className={cx(
+                        "rounded-[var(--radius-card)] border p-3 transition-colors",
+                        activeLineId === line.id ? "border-gold" : "border-hairline",
+                      )}
                     >
                       <div className="flex items-start gap-2">
                         <div className="min-w-0 flex-1">
                           <LightingFilterPicker
-                            value={line.systemId}
-                            onChange={(id) => setSystem(line.id, id)}
+                            value={line}
+                            onChange={(pick) => setPick(line.id, pick)}
+                            onPreview={setPreviewId}
                           />
                         </div>
                         <button
@@ -169,26 +219,48 @@ export default function RoomLightingPage() {
                           </svg>
                         </button>
                       </div>
-                      <div className="mt-2 flex items-center justify-between gap-3 pl-0.5">
-                        <label className="flex items-center gap-2 text-xs text-muted">
-                          Qty
-                          <input
-                            type="number"
-                            min={0}
-                            step={sys?.unit === "mtr" ? 0.5 : 1}
-                            value={line.qty || ""}
-                            onChange={(e) => {
-                              const n = parseFloat(e.target.value);
-                              setQty(line.id, Number.isFinite(n) ? Math.max(0, n) : 0);
-                            }}
-                            className="w-20 rounded-md border border-hairline bg-paper px-2 py-1 text-sm text-ink outline-none focus:border-gold"
-                          />
-                          {sys && (
-                            <span className="text-faint">
-                              {UNIT_LABEL[sys.unit]}
-                            </span>
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-3 pl-0.5">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <label className="flex items-center gap-2 text-xs text-muted">
+                            Qty
+                            <input
+                              type="number"
+                              min={0}
+                              step={sys?.unit === "mtr" ? 0.5 : 1}
+                              value={line.qty || ""}
+                              onChange={(e) => {
+                                const n = parseFloat(e.target.value);
+                                patchLine(line.id, {
+                                  qty: Number.isFinite(n) ? Math.max(0, n) : 0,
+                                });
+                              }}
+                              className="w-20 rounded-md border border-hairline bg-paper px-2 py-1 text-sm text-ink outline-none focus:border-gold"
+                            />
+                            {sys && <span className="text-faint">{UNIT_LABEL[sys.unit]}</span>}
+                          </label>
+                          {needsRate && (
+                            <label className="flex items-center gap-2 text-xs text-muted">
+                              Rate ₹
+                              <input
+                                type="number"
+                                min={0}
+                                step={1}
+                                value={line.unitPrice || ""}
+                                placeholder="Enter"
+                                onChange={(e) => {
+                                  const n = parseFloat(e.target.value);
+                                  patchLine(line.id, {
+                                    unitPrice: Number.isFinite(n) ? Math.max(0, n) : undefined,
+                                  });
+                                }}
+                                className={cx(
+                                  "w-24 rounded-md border bg-paper px-2 py-1 text-sm text-ink outline-none focus:border-gold",
+                                  line.unitPrice ? "border-hairline" : "border-gold/60",
+                                )}
+                              />
+                            </label>
                           )}
-                        </label>
+                        </div>
                         <span
                           className={cx(
                             "text-sm tabular-nums",
@@ -198,6 +270,11 @@ export default function RoomLightingPage() {
                           {money(lineTotal)}
                         </span>
                       </div>
+                      {needsRate && !line.unitPrice && (
+                        <p className="mt-1 pl-0.5 text-[11px] text-faint">
+                          No catalogue price for this item. Enter the rate to include it.
+                        </p>
+                      )}
                     </li>
                   );
                 })}
@@ -212,7 +289,7 @@ export default function RoomLightingPage() {
           {computed.accessories.length > 0 && (
             <div className="space-y-2">
               <Eyebrow>Connectors &amp; drivers (auto)</Eyebrow>
-              <ul className="rounded-[var(--radius-card)] border border-hairline bg-panel/40 divide-y divide-hairline text-sm">
+              <ul className="divide-y divide-hairline rounded-[var(--radius-card)] border border-hairline bg-panel/40 text-sm">
                 {computed.accessories.map((a) => (
                   <li
                     key={a.accessoryId}
@@ -271,6 +348,56 @@ export default function RoomLightingPage() {
             )}
           </div>
         </div>
+
+        {/* Right: photos + size specs per light */}
+        <aside className="min-w-0 lg:col-span-2 xl:col-span-1 xl:sticky xl:top-24 xl:h-[calc(100dvh-8rem)] xl:overflow-y-auto xl:pr-1">
+          <div className="space-y-3">
+            <Eyebrow>Photos &amp; specs</Eyebrow>
+            {previewSys && (
+              <div className="sticky top-0 z-10 bg-paper pb-1">
+                <LightDetails
+                  key={`preview-${previewSys.id}`}
+                  sys={previewSys}
+                  unitPrice={previewSys.unitCost}
+                  badge="Preview"
+                  active
+                />
+              </div>
+            )}
+            {pickedLines.length === 0 && !previewSys ? (
+              <div className="rounded-[var(--radius-card)] border border-dashed border-hairline bg-panel/50 p-5 text-center text-sm text-muted">
+                Pick a light to see its photos and size specs here. Hover a match
+                in the list to preview it.
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                {pickedLines.map((line) => {
+                  const sys = getSystem(line.systemId)!;
+                  return (
+                    <div
+                      key={line.id}
+                      ref={(el) => {
+                        if (el) detailRefs.current.set(line.id, el);
+                        else detailRefs.current.delete(line.id);
+                      }}
+                      onClick={() => setActiveLineId(line.id)}
+                    >
+                      <LightDetails
+                        key={line.systemId}
+                        sys={sys}
+                        qty={line.qty}
+                        unitPrice={unitPriceFor(sys, line)}
+                        variant={variantLabel(line)}
+                        badge={`Line ${lines.indexOf(line) + 1}`}
+                        active={activeLineId === line.id && !previewSys}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </aside>
       </div>
     </div>
   );

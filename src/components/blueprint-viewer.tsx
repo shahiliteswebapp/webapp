@@ -29,6 +29,7 @@ export function BlueprintViewer({
   const [nat, setNat] = useState<{ w: number; h: number } | null>(null);
   const [t, setT] = useState<Transform>({ scale: 1, tx: 0, ty: 0 });
   const fitScaleRef = useRef(1);
+  const [fitScale, setFitScale] = useState(1);
   const touchedRef = useRef(false);
   const dragRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(
     null,
@@ -41,6 +42,7 @@ export function BlueprintViewer({
     const ch = el.clientHeight;
     const scale = Math.min(cw / nat.w, ch / nat.h);
     fitScaleRef.current = scale;
+    setFitScale(scale);
     setT({
       scale,
       tx: (cw - nat.w * scale) / 2,
@@ -154,9 +156,7 @@ export function BlueprintViewer({
     zoomTo(t.scale * (dir === 1 ? 1.3 : 1 / 1.3), el.clientWidth / 2, el.clientHeight / 2);
   };
 
-  const pct = fitScaleRef.current
-    ? Math.round((t.scale / fitScaleRef.current) * 100)
-    : 100;
+  const pct = fitScale ? Math.round((t.scale / fitScale) * 100) : 100;
 
   return (
     <div

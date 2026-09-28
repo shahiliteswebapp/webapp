@@ -50,3 +50,6 @@ next-env.d.ts
 # sample blueprints — real client/personal files, used only as local test
 # fixtures. Blueprints are never stored, so they are never committed either.
 /blueprint/
+
+# catalog photos: served from Cloudflare R2 in production (scripts/upload-catalog-images.mjs)
+/public/catalog/

@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { DraftBlueprint, DraftRoom, QuoteDraft, RoomLine } from "@/lib/types";
+import type { DraftBlueprint, QuoteDraft, RoomLine } from "@/lib/types";
 import { idbClear, idbGet, idbSet } from "./idb";
 
 interface DraftContextValue {
@@ -42,7 +42,6 @@ function uid(): string {
 export function DraftProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false);
   const [draft, setDraft] = useState<QuoteDraft | null>(null);
-  const [blueprintUrl, setBlueprintUrl] = useState<string | null>(null);
 
   // Load once from IndexedDB.
   useEffect(() => {
@@ -62,17 +61,18 @@ export function DraftProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Object URL for the blueprint blob, recreated when the blob changes.
+  // Object URL for the blueprint blob, recreated (and the old one revoked)
+  // when the blob changes.
   const blob = draft?.blueprint?.blob ?? null;
+  const blueprintUrl = useMemo(
+    () => (blob ? URL.createObjectURL(blob) : null),
+    [blob],
+  );
   useEffect(() => {
-    if (!blob) {
-      setBlueprintUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(blob);
-    setBlueprintUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [blob]);
+    return () => {
+      if (blueprintUrl) URL.revokeObjectURL(blueprintUrl);
+    };
+  }, [blueprintUrl]);
 
   const commit = useCallback((next: QuoteDraft) => {
     next.updatedAt = new Date().toISOString();

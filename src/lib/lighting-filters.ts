@@ -14,11 +14,9 @@
  *                 -> Notes: Size -> Finish -> Cutout -> Watt
  *
  * Every step here only narrows on fields that exist in the real catalog data
- * (see catalog.ts). Glare, mounting and style aren't tagged on any imported
- * record yet, so those picks are accepted (kept for UI/flow completeness) but
- * don't remove candidates — `optionsFor` naturally returns an empty list for
- * them today, which is the UI's cue to skip that step until the client
- * supplies the missing attribute.
+ * (see catalog.ts). Decorative type / mounting / style come from the client's
+ * chandeliers chart (scripts/merge-decorative.py). Glare isn't tagged on any
+ * record yet, so that pick is accepted but doesn't remove candidates.
  */
 
 import type {
@@ -102,9 +100,9 @@ export function filterDecorative(
 ): DecorativeSystem[] {
   return systems.filter(isDecorative).filter((s) => {
     if (picks.decorType !== undefined && s.decorType !== picks.decorType) return false;
-    if (picks.mounting !== undefined && s.mounting !== picks.mounting) return false;
+    if (picks.mounting !== undefined && !(s.mountingTags ?? []).includes(picks.mounting)) return false;
     if (picks.indoorOutdoor !== undefined && s.indoorOutdoor !== picks.indoorOutdoor) return false;
-    if (picks.style !== undefined && s.style !== picks.style) return false;
+    if (picks.style !== undefined && !(s.styleTags ?? []).includes(picks.style)) return false;
     return true;
   });
 }
@@ -122,6 +120,14 @@ export function decorativeOptions<K extends keyof DecorativeSystem>(
   field: K,
 ): NonNullable<DecorativeSystem[K]>[] {
   return uniqueSorted(candidates.map((s) => s[field])) as NonNullable<DecorativeSystem[K]>[];
+}
+
+/** Tag values (mounting / style) present in the current decorative pool. */
+export function decorativeTagOptions(
+  candidates: DecorativeSystem[],
+  field: "mountingTags" | "styleTags",
+): string[] {
+  return uniqueSorted(candidates.flatMap((s) => s[field] ?? []));
 }
 
 /** Control modes (dimmable / tunable) actually offered by the current candidate pool. */

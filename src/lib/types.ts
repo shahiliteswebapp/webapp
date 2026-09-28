@@ -99,6 +99,11 @@ export interface RoomLine {
   id: string;
   systemId: string;
   qty: number;
+  /** chosen automation variant (functional systems with interface options) */
+  interfaceTag?: "RF" | "DALI" | "BLE" | "PRO" | "TRIAC" | "DIMMABLE" | "TUNABLE";
+  control?: "dimmable" | "tunable";
+  /** employee-entered rate, only used when the catalogue has no price */
+  unitPrice?: number;
 }
 
 export interface DraftRoom {

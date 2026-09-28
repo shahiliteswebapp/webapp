@@ -27,6 +27,8 @@ function SentInner() {
       const key = `sl-pdf:${number}`;
       const b64 = sessionStorage.getItem(key);
       if (b64) {
+        // One-time read from sessionStorage (an external store), client-only.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setPdf(b64);
         sessionStorage.removeItem(key); // one-time
       }
