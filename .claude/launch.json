@@ -4,13 +4,22 @@
     {
       "name": "dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3000
     },
     {
       "name": "dev-mock",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "--port", "3100"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3100"
+      ],
       "port": 3100,
       "env": {
         "AUTH_GOOGLE_ID": "",
@@ -20,6 +29,20 @@
         "SUPABASE_SERVICE_ROLE_KEY": "",
         "GMAIL_APP_PASSWORD": ""
       }
+    },
+    {
+      "name": "scratch-files",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "3200",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "C:/Users/stuti/AppData/Local/Temp/claude/F--Hanabira-4-0-hownd-Shahi-Lites-Webapp/9f057fb1-d602-499d-a68b-60f5b33e9a63/scratchpad"
+      ],
+      "port": 3200
     }
   ]
 }

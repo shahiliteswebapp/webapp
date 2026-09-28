@@ -4,7 +4,8 @@ Merge the client's decorative source sheets into src/lib/catalog-data.json.
   ../rawdata/Geo Liting Part 2 - Product Details.xlsx  wall + mirror lamps, with photo file names
   ../rawdata/chandeliers chart.xlsx                     client tagging: product type, style, mounting
 
-Idempotent: re-running rebuilds the tags and Part 2 rows from the sheets.
+Run after scripts/parse-geo-catalogs.py. Idempotent: re-running rebuilds the
+tags and Part 2 rows from the sheets.
 Photos themselves are converted/uploaded by scripts/upload-catalog-images.mjs;
 this script only records their (webp) file names on each system.
 
@@ -26,7 +27,47 @@ PART2_SOURCE = "Geo Liting Wall Lamp & Mirror Lamps Part 2"
 
 
 def norm_code(code) -> str:
-    return re.sub(r"\s+", "", str(code or "")).upper()
+    return re.sub(r"[\s\-]+", "", str(code or "")).upper()
+
+
+def chart_codes(raw):
+    """A chart cell can name several variants: "5218 A,B", "1025-400,600,800",
+    "2394-1 SM,AMB", "20188/1". Yield every spelling worth trying."""
+    raw = str(raw or "").strip()
+    yield raw
+    for part in re.split(r"/", raw):
+        yield part
+    m = re.match(r"^(.*?[\-\s])([^\-\s,]+(?:\s*,\s*[^\-\s,]+)+)$", raw)
+    if m:
+        stem = m.group(1)
+        for v in m.group(2).split(","):
+            yield stem + v.strip()
+
+
+def alias_keys(code):
+    """Lookup keys for a catalogue code: as printed, without a parenthetical
+    note ("M406-AB (A)", "FY03-AB (ADJUSTABLE)"), and before a variant list
+    ("2212-3,A,B,C")."""
+    code = str(code or "")
+    bare = re.sub(r"\(.*?\)", "", code)
+    return {norm_code(code), norm_code(bare), norm_code(bare.split(",")[0])}
+
+
+def find_items(by_code, decorative, raw):
+    """Catalogue items a chart row refers to: an exact / alias match, else the
+    whole family when the chart names a stem ("B6001" -> B6001-S, B6001-M)."""
+    for c in chart_codes(raw):
+        hit = by_code.get(norm_code(c))
+        if hit:
+            return [hit]
+    stem = str(raw or "").strip()
+    if len(norm_code(stem)) < 4:
+        return []
+    fam = [
+        c for c in decorative
+        if re.match(re.escape(stem) + r"[\s\-(]", str(c["sourceCode"]), re.I)
+    ]
+    return fam
 
 
 def clean(v):
@@ -114,14 +155,12 @@ def main():
 
     # Drop previous Part 2 rows so re-runs don't duplicate them.
     catalog = [c for c in catalog if c.get("source") != PART2_SOURCE]
-    for c in catalog:
-        if c["kind"] == "decorative":
-            c.pop("images", None)
 
     by_code = {}
     for c in catalog:
         if c["kind"] == "decorative":
-            by_code.setdefault(norm_code(c["sourceCode"]), c)
+            for k in alias_keys(c["sourceCode"]):
+                by_code.setdefault(k, c)
 
     # ---- Part 2 (wall / mirror lamps, with photos) ----
     wb = openpyxl.load_workbook(RAW / "Geo Liting Part 2 - Product Details.xlsx", data_only=True)
@@ -133,7 +172,8 @@ def main():
         images = [webp(x) for x in f"{own or ''},{shared or ''}".split(",") if x.strip()]
         existing = by_code.get(norm_code(code))
         if existing:
-            existing["images"] = images
+            have = existing.setdefault("images", [])
+            have.extend(i for i in images if i not in have)
             continue
         code = str(code).strip()
         sysid = "geo-" + re.sub(r"[^a-z0-9]+", "-", code.lower()).strip("-")
@@ -174,23 +214,27 @@ def main():
     # ---- client tagging chart ----
     wb = openpyxl.load_workbook(RAW / "chandeliers chart.xlsx", data_only=True)
     tagged = 0
+    unmatched = []
+    decorative = [c for c in catalog if c["kind"] == "decorative"]
     for r in wb.active.iter_rows(min_row=2, values_only=True):
         code, ptype, style, mount = r[1], r[3], r[4], r[5]
-        c = by_code.get(norm_code(code))
-        if not c:
+        hits = find_items(by_code, decorative, code)
+        if not hits:
+            unmatched.append(str(code))
             continue
         t = map_type(ptype)
-        if t:
-            c["decorType"] = t
-            c["name"] = f"{t} {c['sourceCode']}"
         styles = map_styles(style)
         mounts = map_mountings(mount)
-        c["styleTags"] = styles
-        c["style"] = " / ".join(styles) or None
-        c["mountingTags"] = [m for m in mounts if m != "Outdoor"]
-        c["mounting"] = " / ".join(c["mountingTags"]) or None
-        c["indoorOutdoor"] = "outdoor" if "Outdoor" in mounts else "indoor"
-        tagged += 1
+        for c in hits:
+            if t:
+                c["decorType"] = t
+                c["name"] = f"{t} {c['sourceCode']}"
+            c["styleTags"] = styles
+            c["style"] = " / ".join(styles) or None
+            c["mountingTags"] = [m for m in mounts if m != "Outdoor"]
+            c["mounting"] = " / ".join(c["mountingTags"]) or None
+            c["indoorOutdoor"] = "outdoor" if "Outdoor" in mounts else "indoor"
+            tagged += 1
 
     for c in catalog:
         if c["kind"] == "decorative":
@@ -202,6 +246,7 @@ def main():
     dec = [c for c in catalog if c["kind"] == "decorative"]
     print(f"part2 added {added}, tagged {tagged}, decorative {len(dec)}, "
           f"with images {sum(1 for c in dec if c['images'])}, total {len(catalog)}")
+    print(f"chart codes with no catalogue item ({len(unmatched)}): {unmatched}")
 
 
 if __name__ == "__main__":
