@@ -148,12 +148,13 @@ export function getAccessory(id: string): Accessory | undefined {
 
 /*
  * Product photos live in Cloudflare R2 (bucket "shahi-lites-catalog"), uploaded
- * by scripts/upload-catalog-images.mjs. NEXT_PUBLIC_CATALOG_IMAGE_BASE is the
- * bucket's public URL; without it, photos are served from public/catalog/
- * (local dev copy, gitignored).
+ * by scripts/upload-catalog-images.mjs. The default is the bucket's public
+ * r2.dev URL; NEXT_PUBLIC_CATALOG_IMAGE_BASE overrides it (e.g. a custom
+ * domain later, or "/catalog" to serve a local copy from public/catalog/).
  */
 const CATALOG_IMAGE_BASE = (
-  process.env.NEXT_PUBLIC_CATALOG_IMAGE_BASE || "/catalog"
+  process.env.NEXT_PUBLIC_CATALOG_IMAGE_BASE ||
+  "https://pub-76400aed69e24fb282d2f078fbf133f2.r2.dev"
 ).replace(/\/+$/, "");
 
 export function catalogImageUrl(file: string): string {

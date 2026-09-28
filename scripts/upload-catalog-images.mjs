@@ -20,10 +20,14 @@ const BUCKET = process.env.R2_BUCKET || "shahi-lites-catalog";
 const dir = path.resolve(process.argv[2] || "../rawdata/catalog-images-web");
 const files = readdirSync(dir).filter((f) => f.endsWith(".webp"));
 
+// Windows needs a shell to run npx.cmd, and the shell splits on spaces, so
+// quote every argument there.
+const isWin = process.platform === "win32";
+const q = (a) => (isWin ? `"${a}"` : a);
 const wrangler = (args) =>
-  execFileSync("npx", ["-y", "wrangler@4", ...args], {
+  execFileSync("npx", ["-y", "wrangler@4", ...args].map(q), {
     encoding: "utf8",
-    shell: process.platform === "win32",
+    shell: isWin,
     stdio: ["ignore", "pipe", "pipe"],
   });
 
