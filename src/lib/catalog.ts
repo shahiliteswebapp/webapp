@@ -69,6 +69,8 @@ interface BaseSystem {
   automatic: boolean;
   interfaceOptions: InterfaceOption[];
   source: string;
+  /** product photo file names (webp), served from CATALOG_IMAGE_BASE */
+  images?: string[];
 }
 
 export interface FunctionalSystem extends BaseSystem {
@@ -114,8 +116,14 @@ export interface DecorativeSystem extends BaseSystem {
   material: string | null;
   lamp: string | null;
   sku: string | null;
-  /** product photo file names (webp), served from CATALOG_IMAGE_BASE */
   images: string[];
+  /**
+   * Number printed after the SKU in the Geo Liting catalogues. Probably a
+   * price code; NOT used for pricing until the client confirms.
+   */
+  listNumber?: number | null;
+  /** where the item is printed, e.g. "Geo Liting Mix 1 Updated p.34" */
+  catalogPage?: string;
 }
 
 export type LightingSystem = FunctionalSystem | DecorativeSystem;
@@ -162,7 +170,7 @@ export function catalogImageUrl(file: string): string {
 }
 
 export function systemImages(sys: LightingSystem): string[] {
-  return sys.kind === "decorative" ? (sys.images ?? []).map(catalogImageUrl) : [];
+  return (sys.images ?? []).map(catalogImageUrl);
 }
 
 /**

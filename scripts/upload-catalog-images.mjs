@@ -4,8 +4,10 @@
  *   1. python scripts/convert-catalog-images.py   (Part 2 photos -> webp)
  *   2. python scripts/parse-geo-catalogs.py       (Part 1 / Mix 1 items + photos)
  *   3. python scripts/merge-decorative.py         (Part 2 rows + client chart tags)
- *   4. npx wrangler login                          (once per machine)
- *   5. node scripts/upload-catalog-images.mjs [dir]
+ *   4. python scripts/add-architectural-missing.py (price-list rows the first import skipped)
+ *   5. python scripts/parse-functional-images.py  (ECO / Architectural photos)
+ *   6. npx wrangler login                          (once per machine)
+ *   7. node scripts/upload-catalog-images.mjs [dir]
  *
  * Photos are served from the bucket's public URL (CATALOG_IMAGE_BASE in
  * src/lib/catalog.ts). Files already public at that URL are skipped, so
