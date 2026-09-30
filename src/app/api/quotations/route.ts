@@ -6,10 +6,14 @@ import { computeQuote } from "@/lib/quote";
 import { createQuotation } from "@/lib/store";
 import { sendQuotationEmail } from "@/lib/email";
 import { renderQuotationPdf } from "@/lib/pdf/quotation-pdf";
+import { productPhotosForPdf } from "@/lib/pdf/product-images";
+import { loadUploadedCatalog } from "@/lib/catalog-store";
 import type { DraftRoom } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Room for fetching product photos for the PDF.
+export const maxDuration = 60;
 
 interface Body {
   rooms?: DraftRoom[];
@@ -17,6 +21,8 @@ interface Body {
   blueprintName?: string;
   /** "review" (send it on) or "download" (keep it, no review requested) */
   action?: "review" | "download";
+  /** charge GST (default true) */
+  applyGst?: boolean;
 }
 
 export async function POST(req: Request) {
@@ -37,8 +43,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "No rooms to quote." }, { status: 400 });
   }
 
+  // Uploaded catalogue items must be known before pricing.
+  await loadUploadedCatalog({ fresh: true });
+
   // Recompute totals server-side. Client numbers are never trusted.
-  const quote = computeQuote(rooms);
+  const quote = computeQuote(rooms, { applyGst: body.applyGst !== false });
   if (quote.grandTotal <= 0) {
     return NextResponse.json(
       { error: "Add lighting to at least one room first." },
@@ -57,7 +66,11 @@ export async function POST(req: Request) {
 
   let pdf: Buffer;
   try {
+    const photos = await productPhotosForPdf(
+      quote.rooms.flatMap((r) => r.systems.map((l) => l.image ?? "")),
+    );
     pdf = await renderQuotationPdf({
+      photos,
       number: record.number,
       createdAtISO: record.createdAt,
       employeeName: session.name,
@@ -96,6 +109,7 @@ export async function POST(req: Request) {
         number: record.number,
         pdf,
         grandTotal: quote.grandTotal,
+        applyGst: quote.applyGst,
         employeeName: session.name,
         employeeEmail: session.email,
       });

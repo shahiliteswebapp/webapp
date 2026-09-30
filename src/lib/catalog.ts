@@ -4,9 +4,8 @@
  *   - decorative fixtures: rawdata/Geo Liting Hanging & Celliling Light Part 1.pdf, rawdata/Geo Liting Mix 1 Updated.pdf
  * Parsed once into catalog-data.json (see scripts used at import time — not part of the app).
  *
- * Decorative items (Geo Liting) carry unitCost 0: the source catalogue has no price column,
- * only item no / lamp / size / finish / material. Needs a priced sheet from the client before
- * decorative lines can go into a real quotation.
+ * Decorative items (Geo Liting) are priced from the grey number after the SKU (listNumber / 10,
+ * per the client). Items without one carry unitCost 0 and take a typed-in rate.
  *
  * `layer`, `mounting`, `style`, `indoorOutdoor` are not present in any source document — they're
  * either an inferred category→layer mapping (functional) or left null pending client tagging
@@ -18,7 +17,16 @@ import catalogData from "./catalog-data.json";
 
 export type Unit = "nos" | "mtr";
 
-export type InterfaceTag = "RF" | "DALI" | "BLE" | "PRO" | "TRIAC" | "DIMMABLE" | "TUNABLE";
+/** Built-in tags, plus any free-text interface a superadmin uploads (e.g. "Kasambi"). */
+export type InterfaceTag =
+  | "RF"
+  | "DALI"
+  | "BLE"
+  | "PRO"
+  | "TRIAC"
+  | "DIMMABLE"
+  | "TUNABLE"
+  | (string & {});
 export type ControlMode = "dimmable" | "tunable";
 
 /** One automation upsell for a system: total price when that interface/control is chosen. */
@@ -69,8 +77,12 @@ interface BaseSystem {
   automatic: boolean;
   interfaceOptions: InterfaceOption[];
   source: string;
-  /** product photo file names (webp), served from CATALOG_IMAGE_BASE */
+  /** product photo file names (webp) served from CATALOG_IMAGE_BASE, or full URLs (uploaded items) */
   images?: string[];
+  /** true for items a superadmin added from an Excel upload */
+  uploaded?: boolean;
+  /** brand, from the upload sheet's "Company Name" column */
+  company?: string | null;
 }
 
 export interface FunctionalSystem extends BaseSystem {
@@ -86,6 +98,8 @@ export interface FunctionalSystem extends BaseSystem {
   ledSource: string | null;
   ipRating: string | null;
   colour: string | null;
+  /** from the upload sheet; unset on the imported catalogue */
+  glare?: "no-glare" | "some-glare" | null;
 }
 
 export const DECOR_TYPES = [
@@ -118,8 +132,8 @@ export interface DecorativeSystem extends BaseSystem {
   sku: string | null;
   images: string[];
   /**
-   * Number printed after the SKU in the Geo Liting catalogues. Probably a
-   * price code; NOT used for pricing until the client confirms.
+   * Number printed in grey after the SKU in the Geo Liting catalogues. The
+   * client confirmed: drop its last zero to get the price (see withListPrice).
    */
   listNumber?: number | null;
   /** where the item is printed, e.g. "Geo Liting Mix 1 Updated p.34" */
@@ -128,7 +142,25 @@ export interface DecorativeSystem extends BaseSystem {
 
 export type LightingSystem = FunctionalSystem | DecorativeSystem;
 
-export const LIGHTING_SYSTEMS = catalogData as unknown as LightingSystem[];
+/*
+ * Geo Liting prints a number in grey after each SKU (e.g. "H7697HL 420000").
+ * Per the client, dropping its last zero gives the price per product (42000).
+ */
+function withListPrice(sys: LightingSystem): LightingSystem {
+  if (sys.kind === "decorative" && sys.unitCost <= 0 && sys.listNumber && sys.listNumber > 0) {
+    return { ...sys, unitCost: Math.floor(sys.listNumber / 10) };
+  }
+  return sys;
+}
+
+/**
+ * Every system the app can quote: the built-in catalogue plus whatever a
+ * superadmin has uploaded (see registerUploadedSystems). Mutated in place so
+ * existing imports see uploads.
+ */
+export const LIGHTING_SYSTEMS: LightingSystem[] = (
+  catalogData as unknown as LightingSystem[]
+).map(withListPrice);
 
 export const ACCESSORIES: Accessory[] = [
   { id: "drv-4", name: "LED Driver (up to 4 spots)", unit: "nos", unitCost: 380 },
@@ -144,6 +176,30 @@ export const ACCESSORIES: Accessory[] = [
 ];
 
 const SYSTEM_BY_ID = new Map(LIGHTING_SYSTEMS.map((s) => [s.id, s]));
+let uploadedKey = "";
+
+/**
+ * Merge the superadmin-uploaded items into the catalogue (replacing any
+ * earlier uploaded set). Idempotent: a repeat call with the same list is a
+ * no-op. Called on the server before pricing, and in the browser by
+ * <CatalogHydrator> before any page renders.
+ */
+export function registerUploadedSystems(items: LightingSystem[]): void {
+  const key = items.map((i) => `${i.id}:${i.unitCost}:${(i.images ?? []).length}`).join("|");
+  if (key === uploadedKey && SYSTEM_BY_ID.size > 0) return;
+  uploadedKey = key;
+  for (let i = LIGHTING_SYSTEMS.length - 1; i >= 0; i--) {
+    if (LIGHTING_SYSTEMS[i].uploaded) {
+      SYSTEM_BY_ID.delete(LIGHTING_SYSTEMS[i].id);
+      LIGHTING_SYSTEMS.splice(i, 1);
+    }
+  }
+  for (const item of items) {
+    const sys = { ...item, uploaded: true } as LightingSystem;
+    LIGHTING_SYSTEMS.push(sys);
+    SYSTEM_BY_ID.set(sys.id, sys);
+  }
+}
 const ACCESSORY_BY_ID = new Map(ACCESSORIES.map((a) => [a.id, a]));
 
 export function getSystem(id: string): LightingSystem | undefined {
@@ -166,6 +222,8 @@ const CATALOG_IMAGE_BASE = (
 ).replace(/\/+$/, "");
 
 export function catalogImageUrl(file: string): string {
+  // Uploaded items store their full URL.
+  if (/^(https?:)?\/\//.test(file) || file.startsWith("/")) return file;
   return `${CATALOG_IMAGE_BASE}/${encodeURIComponent(file)}`;
 }
 

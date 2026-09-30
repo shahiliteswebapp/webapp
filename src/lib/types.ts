@@ -100,7 +100,7 @@ export interface RoomLine {
   systemId: string;
   qty: number;
   /** chosen automation variant (functional systems with interface options) */
-  interfaceTag?: "RF" | "DALI" | "BLE" | "PRO" | "TRIAC" | "DIMMABLE" | "TUNABLE";
+  interfaceTag?: string;
   control?: "dimmable" | "tunable";
   /** employee-entered rate, only used when the catalogue has no price */
   unitPrice?: number;
@@ -116,5 +116,14 @@ export interface QuoteDraft {
   createdAt: string;
   updatedAt: string;
   blueprint?: DraftBlueprint;
+  /** set when the employee chose to quote without a blueprint */
+  noBlueprint?: boolean;
+  /** charge GST on the quotation (default true) */
+  applyGst?: boolean;
   rooms: DraftRoom[];
+}
+
+/** True once the employee has started (blueprint uploaded, or skipped). */
+export function draftStarted(d: QuoteDraft | null | undefined): d is QuoteDraft {
+  return !!d && (!!d.blueprint || !!d.noBlueprint);
 }

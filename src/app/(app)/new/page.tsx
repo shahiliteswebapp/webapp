@@ -8,10 +8,11 @@ import { UPLOAD } from "@/lib/config";
 import { useDraft } from "@/lib/draft/context";
 import { BlueprintError, renderBlueprint } from "@/lib/draft/render";
 import { cx } from "@/lib/cx";
+import { draftStarted } from "@/lib/types";
 
 export default function BlueprintUploadPage() {
   const router = useRouter();
-  const { loaded, draft, setBlueprint, discard } = useDraft();
+  const { loaded, draft, setBlueprint, skipBlueprint, discard } = useDraft();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,18 +72,22 @@ export default function BlueprintUploadPage() {
 
       {!loaded ? (
         <div className="h-48 animate-pulse rounded-[var(--radius-card)] bg-panel" />
-      ) : draft?.blueprint ? (
+      ) : draftStarted(draft) ? (
         <Card className="space-y-4">
           <Eyebrow>Resume where you left off</Eyebrow>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="font-display text-2xl text-ink-deep">
-                {draft.blueprint.name}
+                {draft.blueprint?.name ?? "Quotation without a blueprint"}
               </p>
               <p className="mt-1 text-sm text-muted">
-                {draft.blueprint.kind.toUpperCase()} ·{" "}
-                {draft.blueprint.pageCount} page
-                {draft.blueprint.pageCount === 1 ? "" : "s"} ·{" "}
+                {draft.blueprint && (
+                  <>
+                    {draft.blueprint.kind.toUpperCase()} ·{" "}
+                    {draft.blueprint.pageCount} page
+                    {draft.blueprint.pageCount === 1 ? "" : "s"} ·{" "}
+                  </>
+                )}
                 {draft.rooms.length} room
                 {draft.rooms.length === 1 ? "" : "s"} so far
               </p>
@@ -176,6 +181,21 @@ export default function BlueprintUploadPage() {
               {error}
             </p>
           )}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-card)] border border-hairline p-4">
+            <p className="text-sm text-muted">
+              No blueprint? You can still build the quotation room by room.
+            </p>
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() => {
+                skipBlueprint();
+                router.push("/new/rooms");
+              }}
+            >
+              Continue without blueprint
+            </Button>
+          </div>
           <p className="text-xs text-faint">
             The blueprint stays on your device. It is never uploaded to a
             server or stored by Shahi Lites.

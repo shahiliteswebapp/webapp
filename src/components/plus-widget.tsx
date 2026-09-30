@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { cx } from "@/lib/cx";
 
 const ITEMS = [
-  { href: "/new", label: "Start New", desc: "Upload a blueprint" },
+  { href: "/new", label: "Start New", desc: "Build a quotation" },
   { href: "/history", label: "History", desc: "Past quotations" },
   { href: "/dashboard", label: "Dashboard", desc: "Overview" },
 ];
@@ -14,6 +14,7 @@ const ITEMS = [
 const SUPERADMIN_ITEMS = [
   { href: "/review", label: "Review queue", desc: "Approve or reject" },
   { href: "/admin", label: "Access", desc: "Add or remove Gmail IDs" },
+  { href: "/admin/catalog", label: "Catalogue", desc: "Upload products + photos" },
 ];
 
 export function PlusWidget({ isSuperadmin = false }: { isSuperadmin?: boolean }) {

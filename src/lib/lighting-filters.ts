@@ -88,7 +88,8 @@ export function filterFunctional(
     if (picks.finish !== undefined && s.finish !== picks.finish) return false;
     if (picks.cutout !== undefined && s.cutout !== picks.cutout) return false;
     if (picks.watt !== undefined && s.watt !== picks.watt) return false;
-    // glare has no data on any record yet — not filtered, see file header
+    // Only uploaded items carry a glare tag; untagged items always pass.
+    if (picks.glare !== undefined && s.glare && s.glare !== picks.glare) return false;
     return true;
   });
 }
@@ -143,7 +144,7 @@ export function availableInterfaces(
   const tags = candidates.flatMap((s) =>
     s.interfaceOptions.filter((io) => !control || io.control === control).map((io) => io.interface),
   );
-  return uniqueSorted(tags);
+  return uniqueSorted(tags.filter(Boolean));
 }
 
 export const LAYER_OPTIONS: Layer[] = [1, 2, 3, 4, 5, 6];

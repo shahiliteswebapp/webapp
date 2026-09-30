@@ -9,25 +9,26 @@ import { useDraft } from "@/lib/draft/context";
 import { money } from "@/lib/format";
 import { computeQuote } from "@/lib/quote";
 import { cx } from "@/lib/cx";
+import { draftStarted } from "@/lib/types";
 
 export default function SummaryPage() {
   const router = useRouter();
-  const { loaded, draft, addRoom, removeRoom } = useDraft();
+  const { loaded, draft, addRoom, removeRoom, setApplyGst } = useDraft();
   const [newRoom, setNewRoom] = useState("");
 
   useEffect(() => {
     if (!loaded) return;
-    if (!draft?.blueprint) router.replace("/new");
+    if (!draftStarted(draft)) router.replace("/new");
     else if (draft.rooms.length === 0) router.replace("/new/rooms");
   }, [loaded, draft, router]);
 
-  if (!loaded || !draft?.blueprint || draft.rooms.length === 0) {
+  if (!loaded || !draftStarted(draft) || draft.rooms.length === 0) {
     return (
       <div className="h-[60vh] animate-pulse rounded-[var(--radius-card)] bg-panel" />
     );
   }
 
-  const quote = computeQuote(draft.rooms);
+  const quote = computeQuote(draft.rooms, { applyGst: draft.applyGst });
 
   const submitAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,14 +46,21 @@ export default function SummaryPage() {
         </div>
       </div>
 
-      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_440px]">
+      <div
+        className={cx(
+          "grid min-w-0 gap-5",
+          draft.blueprint ? "lg:grid-cols-[minmax(0,1fr)_440px]" : "mx-auto max-w-xl",
+        )}
+      >
         {/* Blueprint */}
-        <div className="h-[45vh] min-w-0 lg:sticky lg:top-24 lg:h-[calc(100dvh-14rem)]">
-          <BlueprintViewer
-            src={draft.blueprint.previewDataUrl}
-            className="h-full w-full"
-          />
-        </div>
+        {draft.blueprint && (
+          <div className="h-[45vh] min-w-0 lg:sticky lg:top-24 lg:h-[calc(100dvh-14rem)]">
+            <BlueprintViewer
+              src={draft.blueprint.previewDataUrl}
+              className="h-full w-full"
+            />
+          </div>
+        )}
 
         {/* Room cards + totals */}
         <div className="flex min-w-0 flex-col gap-4">
@@ -170,10 +178,20 @@ export default function SummaryPage() {
                   {money(quote.subtotal)}
                 </dd>
               </div>
-              <div className="flex justify-between">
-                <dt className="text-muted">GST @ {quote.gstRatePct}%</dt>
-                <dd className="tabular-nums text-ink">
-                  {money(quote.gstAmount)}
+              <div className="flex items-center justify-between gap-3">
+                <dt>
+                  <label className="flex cursor-pointer items-center gap-2 text-muted">
+                    <input
+                      type="checkbox"
+                      checked={quote.applyGst}
+                      onChange={(e) => setApplyGst(e.target.checked)}
+                      className="h-4 w-4 accent-[var(--color-gold)]"
+                    />
+                    Charge GST @ {quote.gstRatePct}%
+                  </label>
+                </dt>
+                <dd className={cx("tabular-nums", quote.applyGst ? "text-ink" : "text-faint")}>
+                  {quote.applyGst ? money(quote.gstAmount) : "Not included"}
                 </dd>
               </div>
               <div className="flex justify-between border-t border-gold/30 pt-2">

@@ -7,6 +7,7 @@ import {
   LIGHTING_SYSTEMS,
   UNIT_LABEL,
   getSystem,
+  systemImages,
   unitPriceFor,
   variantLabel,
   type ControlMode,
@@ -451,6 +452,28 @@ function DecorativeFlow({
 
 /* ----------------------------------- Results ----------------------------------- */
 
+/** Small product photo in the match list (hover preview does not exist on touch screens). */
+function Thumb({ id }: { id: string }) {
+  const sys = getSystem(id);
+  const src = sys ? systemImages(sys)[0] : undefined;
+  const [failed, setFailed] = useState(false);
+  return (
+    <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded border border-hairline bg-panel/60">
+      {src && !failed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailed(true)}
+          className="h-full w-full object-contain"
+        />
+      ) : null}
+    </span>
+  );
+}
+
 const MAX_RESULTS = 300;
 
 function ResultList<T extends { id: string; name: string; unit: string }>({
@@ -506,7 +529,8 @@ function ResultList<T extends { id: string; name: string; unit: string }>({
                     onFocus={() => onPreview?.(s.id)}
                     className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-xs hover:bg-gold-tint focus:bg-gold-tint focus:outline-none"
                   >
-                    <span className="min-w-0 truncate">{s.name}</span>
+                    <Thumb id={s.id} />
+                    <span className="min-w-0 flex-1 truncate">{s.name}</span>
                     <span className="shrink-0 tabular-nums text-faint">
                       {price > 0 ? money(price) : "No price"}
                     </span>

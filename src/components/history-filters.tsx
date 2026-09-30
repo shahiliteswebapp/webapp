@@ -23,8 +23,7 @@ function rangeFor(preset: string): { from?: string; to?: string } {
       return { from: ymd(d), to: today };
     }
     case "month": {
-      const d = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { from: ymd(d), to: today };
+      return { from: `${today.slice(0, 8)}01`, to: today };
     }
     default:
       return {};
@@ -41,6 +40,7 @@ const PRESETS = [
 
 const STATUS_OPTIONS: Array<{ value: "" | QuotationStatus; label: string }> = [
   { value: "", label: "All statuses" },
+  { value: "downloaded", label: STATUS_LABEL.downloaded },
   { value: "submitted_for_review", label: STATUS_LABEL.submitted_for_review },
   { value: "approved", label: STATUS_LABEL.approved },
   { value: "rejected", label: STATUS_LABEL.rejected },

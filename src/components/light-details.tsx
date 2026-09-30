@@ -26,6 +26,7 @@ function specRows(sys: LightingSystem): [string, string][] {
           ["Colour", sys.colour],
           ["LED", sys.ledSource],
           ["IP rating", sys.ipRating],
+          ["Brand", sys.company],
           ["Category", sys.category],
           ["Layer", sys.layer ? `${sys.layer}. ${LAYER_LABEL[sys.layer]}` : null],
         ]
@@ -37,6 +38,7 @@ function specRows(sys: LightingSystem): [string, string][] {
           ["Type", sys.decorType],
           ["Mounting", sys.mounting],
           ["Style", sys.style],
+          ["Brand", sys.company],
           ["SKU", sys.sku],
         ];
   return rows.filter((r): r is [string, string] => Boolean(r[1]));
@@ -85,6 +87,7 @@ export function LightDetails({
   variant,
   badge,
   active,
+  compact,
 }: {
   sys: LightingSystem;
   qty?: number;
@@ -92,11 +95,55 @@ export function LightDetails({
   variant?: string;
   badge?: string;
   active?: boolean;
+  /** small side-by-side layout, used inline on phones */
+  compact?: boolean;
 }) {
   const photos = systemImages(sys);
   const [shown, setShown] = useState(0);
   const current = photos[Math.min(shown, photos.length - 1)];
   const specs = specRows(sys);
+
+  if (compact) {
+    return (
+      <div className="flex gap-3 rounded-md border border-hairline bg-paper p-2">
+        <div className="flex w-28 shrink-0 flex-col gap-1">
+          <div className="aspect-square overflow-hidden rounded bg-panel/60">
+            {current ? <Photo key={current} src={current} alt={sys.name} /> : <NoPhoto />}
+          </div>
+          {photos.length > 1 && (
+            <div className="flex gap-1 overflow-x-auto">
+              {photos.map((p, i) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setShown(i)}
+                  aria-label={`Photo ${i + 1}`}
+                  className={cx(
+                    "h-7 w-7 shrink-0 overflow-hidden rounded border bg-panel/60",
+                    i === shown ? "border-gold" : "border-hairline",
+                  )}
+                >
+                  <Photo src={p} alt="" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {specs.length > 0 ? (
+          <dl className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] content-start gap-x-2 gap-y-0.5 text-[11px]">
+            {specs.slice(0, 7).map(([k, v]) => (
+              <div key={k} className="contents">
+                <dt className="text-faint">{k}</dt>
+                <dd className="break-words text-ink">{v}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p className="text-[11px] text-faint">{variant || sys.name}</p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <article

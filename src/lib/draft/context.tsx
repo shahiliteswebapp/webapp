@@ -17,6 +17,9 @@ interface DraftContextValue {
   draft: QuoteDraft | null;
   blueprintUrl: string | null;
   setBlueprint: (bp: DraftBlueprint) => Promise<void>;
+  /** start a quotation with no blueprint */
+  skipBlueprint: () => void;
+  setApplyGst: (v: boolean) => void;
   addRoom: (name: string) => void;
   addRooms: (names: string[]) => void;
   renameRoom: (id: string, name: string) => void;
@@ -98,10 +101,27 @@ export function DraftProvider({ children }: { children: ReactNode }) {
   const setBlueprint = useCallback(
     async (bp: DraftBlueprint) => {
       const base = draft ?? emptyDraft();
-      const next: QuoteDraft = { ...base, blueprint: bp };
+      const next: QuoteDraft = { ...base, blueprint: bp, noBlueprint: false };
       commit(next);
     },
     [draft, commit],
+  );
+
+  const skipBlueprint = useCallback(() => {
+    mutate((d) => {
+      d.noBlueprint = true;
+      return d;
+    });
+  }, [mutate]);
+
+  const setApplyGst = useCallback(
+    (v: boolean) => {
+      mutate((d) => {
+        d.applyGst = v;
+        return d;
+      });
+    },
+    [mutate],
   );
 
   const addRoom = useCallback(
@@ -192,6 +212,8 @@ export function DraftProvider({ children }: { children: ReactNode }) {
       draft,
       blueprintUrl,
       setBlueprint,
+      skipBlueprint,
+      setApplyGst,
       addRoom,
       addRooms,
       renameRoom,
@@ -205,6 +227,8 @@ export function DraftProvider({ children }: { children: ReactNode }) {
       draft,
       blueprintUrl,
       setBlueprint,
+      skipBlueprint,
+      setApplyGst,
       addRoom,
       addRooms,
       renameRoom,

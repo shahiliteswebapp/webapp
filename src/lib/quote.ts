@@ -1,6 +1,7 @@
 import {
   getAccessory,
   getSystem,
+  systemImages,
   unitPriceFor,
   variantLabel,
   UNIT_LABEL,
@@ -26,6 +27,8 @@ export interface ComputedSystemLine {
   qty: number;
   unitCost: number;
   total: number;
+  /** first product photo URL, if the catalogue has one */
+  image?: string;
 }
 
 export interface ComputedAccessory {
@@ -51,6 +54,8 @@ export interface ComputedRoom {
 export interface ComputedQuote {
   rooms: ComputedRoom[];
   subtotal: number;
+  /** false when the employee chose not to charge GST */
+  applyGst: boolean;
   gstRatePct: number;
   gstAmount: number;
   grandTotal: number;
@@ -95,6 +100,7 @@ export function computeRoom(room: DraftRoom): ComputedRoom {
       qty: g.qty,
       unitCost: g.unitCost,
       total: round2(g.unitCost * g.qty),
+      image: systemImages(sys)[0],
     });
   }
 
@@ -143,13 +149,18 @@ export function computeRoom(room: DraftRoom): ComputedRoom {
   };
 }
 
-export function computeQuote(rooms: DraftRoom[]): ComputedQuote {
+export function computeQuote(
+  rooms: DraftRoom[],
+  opts: { applyGst?: boolean } = {},
+): ComputedQuote {
+  const applyGst = opts.applyGst !== false;
   const computed = rooms.map(computeRoom);
   const subtotal = round2(computed.reduce((s, r) => s + r.subtotal, 0));
-  const gstAmount = round2((subtotal * QUOTE.gstRatePct) / 100);
+  const gstAmount = applyGst ? round2((subtotal * QUOTE.gstRatePct) / 100) : 0;
   return {
     rooms: computed,
     subtotal,
+    applyGst,
     gstRatePct: QUOTE.gstRatePct,
     gstAmount,
     grandTotal: round2(subtotal + gstAmount),

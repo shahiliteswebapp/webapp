@@ -12,7 +12,7 @@ import { useDraft } from "@/lib/draft/context";
 import { money } from "@/lib/format";
 import { computeRoom } from "@/lib/quote";
 import { cx } from "@/lib/cx";
-import type { RoomLine } from "@/lib/types";
+import { draftStarted, type RoomLine } from "@/lib/types";
 
 function uid(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -30,7 +30,7 @@ export default function RoomLightingPage() {
 
   useEffect(() => {
     if (!loaded) return;
-    if (!draft?.blueprint) {
+    if (!draftStarted(draft)) {
       router.replace("/new");
       return;
     }
@@ -59,7 +59,7 @@ export default function RoomLightingPage() {
       ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [activeLineId]);
 
-  if (!loaded || !draft?.blueprint || draft.rooms.length === 0) {
+  if (!loaded || !draftStarted(draft) || draft.rooms.length === 0) {
     return (
       <div className="h-[60vh] animate-pulse rounded-[var(--radius-card)] bg-panel" />
     );
@@ -79,6 +79,8 @@ export default function RoomLightingPage() {
   const isLast = index === rooms.length - 1;
   const previewSys = previewId ? getSystem(previewId) : undefined;
   const pickedLines = lines.filter((l) => getSystem(l.systemId));
+  // Inline details show wherever the side column is hidden.
+  const sideColumnClass = draft.blueprint ? "xl:hidden" : "lg:hidden";
 
   const update = (next: RoomLine[]) => setRoomLines(room.id, next);
   const addLine = () => {
@@ -119,14 +121,23 @@ export default function RoomLightingPage() {
         </div>
       </div>
 
-      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_400px] xl:grid-cols-[minmax(0,1fr)_400px_340px]">
+      <div
+        className={cx(
+          "grid min-w-0 gap-5",
+          draft.blueprint
+            ? "lg:grid-cols-[minmax(0,1fr)_400px] xl:grid-cols-[minmax(0,1fr)_400px_340px]"
+            : "lg:grid-cols-[minmax(0,1fr)_340px]",
+        )}
+      >
         {/* Left: blueprint */}
-        <div className="h-[50vh] min-w-0 lg:sticky lg:top-24 lg:h-[calc(100dvh-14rem)]">
-          <BlueprintViewer
-            src={draft.blueprint.previewDataUrl}
-            className="h-full w-full"
-          />
-        </div>
+        {draft.blueprint && (
+          <div className="h-[50vh] min-w-0 lg:sticky lg:top-24 lg:h-[calc(100dvh-14rem)]">
+            <BlueprintViewer
+              src={draft.blueprint.previewDataUrl}
+              className="h-full w-full"
+            />
+          </div>
+        )}
 
         {/* Middle: room + lighting editor */}
         <div className="flex min-w-0 flex-col gap-5">
@@ -275,6 +286,20 @@ export default function RoomLightingPage() {
                           No catalogue price for this item. Enter the rate to include it.
                         </p>
                       )}
+                      {/* Phones / tablets: photo + specs right on the line,
+                          since the side column sits far below. */}
+                      {sys && (
+                        <div className={cx("mt-3", sideColumnClass)}>
+                          <LightDetails
+                            key={line.systemId}
+                            sys={sys}
+                            qty={line.qty}
+                            unitPrice={unit}
+                            variant={variantLabel(line)}
+                            compact
+                          />
+                        </div>
+                      )}
                     </li>
                   );
                 })}
@@ -349,8 +374,16 @@ export default function RoomLightingPage() {
           </div>
         </div>
 
-        {/* Right: photos + size specs per light */}
-        <aside className="min-w-0 lg:col-span-2 xl:col-span-1 xl:sticky xl:top-24 xl:h-[calc(100dvh-8rem)] xl:overflow-y-auto xl:pr-1">
+        {/* Right: photos + size specs per light (wide screens; smaller
+            screens show them inline on each line) */}
+        <aside
+          className={cx(
+            "hidden min-w-0",
+            draft.blueprint
+              ? "xl:sticky xl:top-24 xl:block xl:h-[calc(100dvh-8rem)] xl:overflow-y-auto xl:pr-1"
+              : "lg:sticky lg:top-24 lg:block lg:h-[calc(100dvh-8rem)] lg:overflow-y-auto lg:pr-1",
+          )}
+        >
           <div className="space-y-3">
             <Eyebrow>Photos &amp; specs</Eyebrow>
             {previewSys && (
@@ -370,7 +403,7 @@ export default function RoomLightingPage() {
                 in the list to preview it.
               </div>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="grid gap-3">
                 {pickedLines.map((line) => {
                   const sys = getSystem(line.systemId)!;
                   return (

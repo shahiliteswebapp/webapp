@@ -8,6 +8,7 @@ import { Button, ButtonLink, Eyebrow } from "@/components/ui";
 import { COMMON_ROOM_NAMES } from "@/lib/config";
 import { useDraft } from "@/lib/draft/context";
 import { cx } from "@/lib/cx";
+import { draftStarted } from "@/lib/types";
 
 export default function RoomListPage() {
   const router = useRouter();
@@ -22,11 +23,12 @@ export default function RoomListPage() {
   } = useDraft();
   const [name, setName] = useState("");
 
+  const started = draftStarted(draft);
   useEffect(() => {
-    if (loaded && !draft?.blueprint) router.replace("/new");
-  }, [loaded, draft?.blueprint, router]);
+    if (loaded && !started) router.replace("/new");
+  }, [loaded, started, router]);
 
-  if (!loaded || !draft?.blueprint) {
+  if (!loaded || !draftStarted(draft)) {
     return (
       <div className="h-[60vh] animate-pulse rounded-[var(--radius-card)] bg-panel" />
     );
@@ -51,14 +53,21 @@ export default function RoomListPage() {
         </div>
       </div>
 
-      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
+      <div
+        className={cx(
+          "grid min-w-0 gap-5",
+          draft.blueprint ? "lg:grid-cols-[minmax(0,1fr)_400px]" : "mx-auto max-w-xl",
+        )}
+      >
         {/* Blueprint */}
-        <div className="h-[55vh] min-w-0 lg:sticky lg:top-24 lg:h-[calc(100dvh-14rem)]">
-          <BlueprintViewer
-            src={draft.blueprint.previewDataUrl}
-            className="h-full w-full"
-          />
-        </div>
+        {draft.blueprint && (
+          <div className="h-[55vh] min-w-0 lg:sticky lg:top-24 lg:h-[calc(100dvh-14rem)]">
+            <BlueprintViewer
+              src={draft.blueprint.previewDataUrl}
+              className="h-full w-full"
+            />
+          </div>
+        )}
 
         {/* Room editor */}
         <div className="flex min-w-0 flex-col gap-4">

@@ -1,7 +1,12 @@
 import type { QuotationFilter } from "@/lib/store";
 import type { QuotationStatus } from "@/lib/types";
 
-const STATUSES = ["submitted_for_review", "approved", "rejected"] as const;
+const STATUSES = [
+  "downloaded",
+  "submitted_for_review",
+  "approved",
+  "rejected",
+] as const;
 
 export interface HistoryParams {
   from?: string; // YYYY-MM-DD
@@ -33,12 +38,12 @@ export function toStoreFilter(
   return {
     employeeEmail,
     status: p.status,
-    // Interpret the calendar dates in the server's local time, then to UTC ISO
-    // (the store compares ISO strings on createdAt).
+    // The calendar dates are IST days, then to UTC ISO (the store compares
+    // ISO strings on createdAt).
     fromISO: p.from
-      ? new Date(`${p.from}T00:00:00`).toISOString()
+      ? new Date(`${p.from}T00:00:00+05:30`).toISOString()
       : undefined,
-    toISO: p.to ? new Date(`${p.to}T23:59:59.999`).toISOString() : undefined,
+    toISO: p.to ? new Date(`${p.to}T23:59:59.999+05:30`).toISOString() : undefined,
   };
 }
 

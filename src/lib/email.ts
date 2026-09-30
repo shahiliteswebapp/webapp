@@ -50,6 +50,7 @@ export async function sendQuotationEmail(args: {
   number: string;
   pdf: Buffer;
   grandTotal: number;
+  applyGst?: boolean;
   employeeName: string;
   employeeEmail: string;
 }): Promise<SendResult> {
@@ -72,7 +73,7 @@ export async function sendQuotationEmail(args: {
     text: [
       `Quotation ${args.number}`,
       `Prepared by: ${args.employeeName}`,
-      `Grand total: ${money(args.grandTotal)} (incl. GST)`,
+      `Grand total: ${money(args.grandTotal)} (${args.applyGst === false ? "GST not included" : "incl. GST"})`,
       "",
       "The attached PDF is the only copy of this quotation. Shahi Lites does",
       "not retain a copy of the document or its line items. Please keep it safe.",

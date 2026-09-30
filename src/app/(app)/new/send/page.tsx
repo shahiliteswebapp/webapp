@@ -4,50 +4,52 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { WizardSteps } from "@/components/wizard-steps";
 import { Button, ButtonLink, Card, Eyebrow } from "@/components/ui";
-import { COMPANY, DISCLAIMER, EMAIL, QUOTE } from "@/lib/config";
+import { COMPANY, EMAIL, QUOTE, disclaimer } from "@/lib/config";
 import { useDraft } from "@/lib/draft/context";
 import { downscaleDataUrl } from "@/lib/draft/render";
 import { money } from "@/lib/format";
 import { computeQuote } from "@/lib/quote";
+import { cx } from "@/lib/cx";
+import { draftStarted } from "@/lib/types";
 
 type Action = "review" | "download";
 
 export default function SendPage() {
   const router = useRouter();
-  const { loaded, draft, discard } = useDraft();
+  const { loaded, draft, discard, setApplyGst } = useDraft();
   const [busy, setBusy] = useState<Action | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loaded) return;
-    if (!draft?.blueprint) router.replace("/new");
+    if (!draftStarted(draft)) router.replace("/new");
     else if (draft.rooms.length === 0) router.replace("/new/rooms");
   }, [loaded, draft, router]);
 
-  if (!loaded || !draft?.blueprint || draft.rooms.length === 0) {
+  if (!loaded || !draftStarted(draft) || draft.rooms.length === 0) {
     return (
       <div className="h-64 animate-pulse rounded-[var(--radius-card)] bg-panel" />
     );
   }
 
-  const quote = computeQuote(draft.rooms);
+  const quote = computeQuote(draft.rooms, { applyGst: draft.applyGst });
   const canSend = quote.grandTotal > 0;
 
   const submit = async (action: Action) => {
     setBusy(action);
     setError(null);
     try {
-      const thumb = await downscaleDataUrl(
-        draft.blueprint!.previewDataUrl,
-        1000,
-      );
+      const thumb = draft.blueprint
+        ? await downscaleDataUrl(draft.blueprint.previewDataUrl, 1000)
+        : undefined;
       const res = await fetch("/api/quotations", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           rooms: draft.rooms,
           blueprintPreviewDataUrl: thumb,
-          blueprintName: draft.blueprint!.name,
+          blueprintName: draft.blueprint?.name,
+          applyGst: quote.applyGst,
           action,
         }),
       });
@@ -108,10 +110,23 @@ export default function SendPage() {
               <dt className="text-muted">Subtotal</dt>
               <dd className="tabular-nums text-ink">{money(quote.subtotal)}</dd>
             </div>
-            <div className="flex justify-between">
-              <dt className="text-muted">GST @ {quote.gstRatePct}%</dt>
-              <dd className="tabular-nums text-ink">{money(quote.gstAmount)}</dd>
-            </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt>
+                  <label className="flex cursor-pointer items-center gap-2 text-muted">
+                    <input
+                      type="checkbox"
+                      checked={quote.applyGst}
+                      onChange={(e) => setApplyGst(e.target.checked)}
+                      disabled={busy !== null}
+                      className="h-4 w-4 accent-[var(--color-gold)]"
+                    />
+                    Charge GST @ {quote.gstRatePct}%
+                  </label>
+                </dt>
+                <dd className={cx("tabular-nums", quote.applyGst ? "text-ink" : "text-faint")}>
+                  {quote.applyGst ? money(quote.gstAmount) : "Not included"}
+                </dd>
+              </div>
             <div className="flex justify-between border-t border-hairline pt-2">
               <dt className="font-display text-xl text-ink-deep">Grand total</dt>
               <dd className="font-display text-xl tabular-nums text-ink-deep">
@@ -135,14 +150,14 @@ export default function SendPage() {
               asked to review it.
             </li>
             <li>
-              Either way, this draft (blueprint and line items) is cleared
+              Either way, this draft (any blueprint and the line items) is cleared
               from this device. It is never stored on a server.
             </li>
           </ul>
         </Card>
 
         <p className="rounded-md border border-gold/40 bg-gold-tint px-3 py-2 text-xs text-ink-deep">
-          {DISCLAIMER}
+          {disclaimer(quote.applyGst)}
         </p>
 
         {error && (

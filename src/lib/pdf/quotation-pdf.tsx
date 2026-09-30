@@ -7,7 +7,7 @@ import {
   View,
   renderToBuffer,
 } from "@react-pdf/renderer";
-import { COMPANY, DISCLAIMER, QUOTE } from "@/lib/config";
+import { COMPANY, QUOTE, disclaimer } from "@/lib/config";
 import { addDays, fmtDate, fmtDateTime } from "@/lib/format";
 import type { ComputedQuote, ComputedRoom } from "@/lib/quote";
 import { registerPdfFonts } from "./fonts";
@@ -156,6 +156,14 @@ const s = StyleSheet.create({
     borderBottomColor: HAIRLINE,
     paddingVertical: 5,
   },
+  cPhoto: { width: 44, paddingRight: 8 },
+  photo: {
+    width: 36,
+    height: 36,
+    objectFit: "contain",
+    borderWidth: 1,
+    borderColor: HAIRLINE,
+  },
   cDesc: { flexGrow: 1, flexShrink: 1, paddingRight: 8 },
   cQty: { width: 46, textAlign: "right" },
   cUnit: { width: 34, textAlign: "right", color: MUTED },
@@ -281,10 +289,19 @@ function SlimHead({ number }: { number: string }) {
   );
 }
 
-function LineTable({ room }: { room: ComputedRoom }) {
+function LineTable({
+  room,
+  photos,
+}: {
+  room: ComputedRoom;
+  photos: Record<string, string>;
+}) {
+  // The photo column only appears when at least one line has a photo.
+  const withPhotos = room.systems.some((l) => l.image && photos[l.image]);
   return (
     <View>
       <View style={s.tHead}>
+        {withPhotos && <Text style={[s.tHeadCell, s.cPhoto]}> </Text>}
         <Text style={[s.tHeadCell, s.cDesc]}>Item</Text>
         <Text style={[s.tHeadCell, s.cQty]}>Qty</Text>
         <Text style={[s.tHeadCell, s.cUnit]}>Unit</Text>
@@ -293,7 +310,18 @@ function LineTable({ room }: { room: ComputedRoom }) {
       </View>
 
       {room.systems.map((l) => (
-        <View style={s.tRow} key={`sys-${l.key}`} wrap={false}>
+        <View
+          style={[s.tRow, withPhotos ? { alignItems: "center" } : {}]}
+          key={`sys-${l.key}`}
+          wrap={false}
+        >
+          {withPhotos && (
+            <View style={s.cPhoto}>
+              {l.image && photos[l.image] ? (
+                <Image src={photos[l.image]} style={s.photo} />
+              ) : null}
+            </View>
+          )}
           <Text style={s.cDesc}>{l.name}</Text>
           <Text style={s.cQty}>{l.qty}</Text>
           <Text style={s.cUnit}>{l.unitLabel}</Text>
@@ -304,6 +332,7 @@ function LineTable({ room }: { room: ComputedRoom }) {
 
       {room.accessories.map((a) => (
         <View style={s.tRow} key={`acc-${a.accessoryId}`} wrap={false}>
+          {withPhotos && <View style={s.cPhoto} />}
           <Text style={s.cDesc}>
             {a.name}
             <Text style={{ color: MUTED }}> (connector / driver)</Text>
@@ -336,6 +365,8 @@ interface RenderArgs {
   quote: ComputedQuote;
   blueprintDataUrl?: string;
   blueprintName?: string;
+  /** product photo URL -> JPEG data URI (see product-images.ts) */
+  photos?: Record<string, string>;
 }
 
 function QuotationDoc({
@@ -345,6 +376,7 @@ function QuotationDoc({
   quote,
   blueprintDataUrl,
   blueprintName,
+  photos = {},
 }: RenderArgs) {
   const validUntil = fmtDate(addDays(createdAtISO, QUOTE.validityDays));
   const roomsWithLighting = quote.rooms.filter(
@@ -372,7 +404,6 @@ function QuotationDoc({
             ))}
             <Text>{COMPANY.phones.join(" · ")}</Text>
             <Text>{COMPANY.email}</Text>
-            <Text>GSTIN {COMPANY.gstin}</Text>
           </View>
         </View>
 
@@ -415,7 +446,7 @@ function QuotationDoc({
         ) : null}
 
         <View style={s.disclaimer}>
-          <Text>{DISCLAIMER}</Text>
+          <Text>{disclaimer(quote.applyGst)}</Text>
         </View>
 
         <Footer />
@@ -435,7 +466,7 @@ function QuotationDoc({
             <Image src={blueprintDataUrl} style={[s.thumb, { width: 240 }]} />
           ) : null}
 
-          <LineTable room={room} />
+          <LineTable room={room} photos={photos} />
           <Footer />
         </Page>
       ))}
@@ -467,10 +498,17 @@ function QuotationDoc({
             <Text style={{ color: MUTED }}>Subtotal</Text>
             <Text>{rs(quote.subtotal)}</Text>
           </View>
-          <View style={s.totalsLine}>
-            <Text style={{ color: MUTED }}>GST @ {quote.gstRatePct}%</Text>
-            <Text>{rs(quote.gstAmount)}</Text>
-          </View>
+          {quote.applyGst ? (
+            <View style={s.totalsLine}>
+              <Text style={{ color: MUTED }}>GST @ {quote.gstRatePct}%</Text>
+              <Text>{rs(quote.gstAmount)}</Text>
+            </View>
+          ) : (
+            <View style={s.totalsLine}>
+              <Text style={{ color: MUTED }}>GST</Text>
+              <Text style={{ color: MUTED }}>Not included</Text>
+            </View>
+          )}
           <View style={s.totalsGrand}>
             <Text style={s.grandLabel}>Grand Total</Text>
             <Text style={s.grandValue}>{rs(quote.grandTotal)}</Text>
@@ -478,7 +516,7 @@ function QuotationDoc({
         </View>
 
         <View style={s.disclaimer}>
-          <Text>{DISCLAIMER}</Text>
+          <Text>{disclaimer(quote.applyGst)}</Text>
         </View>
 
         <Footer />

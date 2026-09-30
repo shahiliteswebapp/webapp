@@ -8,14 +8,13 @@ export const COMPANY = {
   legalName: "Shahi Lites",
   tagline: "Lighting Design & Supply",
   addressLines: [
-    "[Address line 1]",
-    "[Address line 2]",
-    "[City, State, PIN]",
+    "2/1, near Mithai Wala Chauraha, Vijay Khand",
+    "Ujariyaon, Vijay Khand 2, Gomti Nagar",
+    "Lucknow, Uttar Pradesh 226010",
   ],
-  phones: ["[Phone number]"],
+  phones: ["+91 94150 04693"],
   email: "shahiliteswebapp@gmail.com",
-  // No website for now (per client).
-  gstin: "[GSTIN]",
+  // No website or GSTIN on the quotation (per client).
 } as const;
 
 export const QUOTE = {
@@ -40,12 +39,18 @@ export const EMAIL = {
   senderEmail: "shahiliteswebapp@gmail.com",
 } as const;
 
-export const DISCLAIMER =
-  "This PDF is the only copy of this quotation. Shahi Lites does not store or retain " +
-  "this document or its line items. Please keep this file safe, as it cannot be " +
-  "reissued or reconstructed. All amounts are in Indian Rupees (INR); GST is charged " +
-  "at 18% as shown. This quotation is valid for 2 months (60 days) from the date and " +
-  "time of generation.";
+export function disclaimer(applyGst = true): string {
+  return (
+    "This PDF is the only copy of this quotation. Shahi Lites does not store or retain " +
+    "this document or its line items. Please keep this file safe, as it cannot be " +
+    "reissued or reconstructed. All amounts are in Indian Rupees (INR); " +
+    (applyGst ? "GST is charged at 18% as shown. " : "GST is not included. ") +
+    "This quotation is valid for 2 months (60 days) from the date and time of generation " +
+    "(India Standard Time)."
+  );
+}
+
+export const DISCLAIMER = disclaimer(true);
 
 export const UPLOAD = {
   acceptedTypes: ["application/pdf", "image/png"],
