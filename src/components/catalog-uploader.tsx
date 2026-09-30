@@ -129,9 +129,10 @@ export function CatalogUploader({ existing }: { existing: LightingSystem[] }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? `Save failed (${res.status})`);
+      const photoCount = items.reduce((n, it) => n + it.images.length, 0);
       setDone(
-        `Saved ${data.saved} product${data.saved === 1 ? "" : "s"} with ${urls.size} photo${
-          urls.size === 1 ? "" : "s"
+        `Saved ${data.saved} product${data.saved === 1 ? "" : "s"} with ${photoCount} photo${
+          photoCount === 1 ? "" : "s"
         }.` + (failed.length ? ` ${failed.length} photo(s) failed: ${failed.slice(0, 5).join(", ")}.` : ""),
       );
       setParsed(null);

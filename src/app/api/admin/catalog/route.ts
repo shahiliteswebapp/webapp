@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { deleteUploadedItems, upsertUploadedItems } from "@/lib/catalog-store";
+import { deleteUploadedItems, setRemoved, upsertUploadedItems } from "@/lib/catalog-store";
 import type { LightingSystem } from "@/lib/catalog";
 
 export const runtime = "nodejs";
@@ -69,6 +69,34 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ total });
   } catch (err) {
     console.error("Catalogue delete failed", err);
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+  }
+}
+
+/**
+ * Remove built-in items from the picker, or bring them back:
+ * { remove: [...ids] } or { restore: [...ids] }.
+ */
+export async function PATCH(req: Request) {
+  if (!(await superadmin())) {
+    return NextResponse.json({ error: "Superadmin only." }, { status: 403 });
+  }
+  let body: { remove?: unknown; restore?: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+  const isIds = (v: unknown): v is string[] =>
+    Array.isArray(v) && v.length > 0 && v.every((i) => typeof i === "string");
+  const remove = isIds(body.remove);
+  const ids = remove ? (body.remove as string[]) : isIds(body.restore) ? body.restore : null;
+  if (!ids) return NextResponse.json({ error: "Nothing to change." }, { status: 400 });
+  try {
+    const removed = await setRemoved(ids, remove);
+    return NextResponse.json({ removed });
+  } catch (err) {
+    console.error("Catalogue remove/restore failed", err);
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }

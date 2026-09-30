@@ -153,14 +153,17 @@ function withListPrice(sys: LightingSystem): LightingSystem {
   return sys;
 }
 
-/**
- * Every system the app can quote: the built-in catalogue plus whatever a
- * superadmin has uploaded (see registerUploadedSystems). Mutated in place so
- * existing imports see uploads.
- */
-export const LIGHTING_SYSTEMS: LightingSystem[] = (
+/** The catalogue shipped with the app (catalog-data.json). Never mutated. */
+export const BUILTIN_SYSTEMS: readonly LightingSystem[] = (
   catalogData as unknown as LightingSystem[]
 ).map(withListPrice);
+
+/**
+ * Every system employees can pick: the built-in catalogue plus whatever a
+ * superadmin has uploaded, minus anything a superadmin removed (see
+ * applyCatalogChanges). Mutated in place so existing imports see changes.
+ */
+export const LIGHTING_SYSTEMS: LightingSystem[] = [...BUILTIN_SYSTEMS];
 
 export const ACCESSORIES: Accessory[] = [
   { id: "drv-4", name: "LED Driver (up to 4 spots)", unit: "nos", unitCost: 380 },
@@ -175,31 +178,36 @@ export const ACCESSORIES: Accessory[] = [
   { id: "kit-canopy-sm", name: "Pendant Canopy Kit", unit: "nos", unitCost: 300 },
 ];
 
+// Every known system, removed ones included, so a draft that already uses a
+// removed item still prices and renders.
 const SYSTEM_BY_ID = new Map(LIGHTING_SYSTEMS.map((s) => [s.id, s]));
-let uploadedKey = "";
+let changesKey = "";
 
 /**
- * Merge the superadmin-uploaded items into the catalogue (replacing any
- * earlier uploaded set). Idempotent: a repeat call with the same list is a
- * no-op. Called on the server before pricing, and in the browser by
- * <CatalogHydrator> before any page renders.
+ * Apply the superadmin's catalogue changes: uploaded items are added (a
+ * repeat call replaces the earlier set) and removed ids drop out of the
+ * pickable list. Idempotent. Called on the server before pricing, and in
+ * the browser by <CatalogHydrator> before any page renders.
  */
-export function registerUploadedSystems(items: LightingSystem[]): void {
-  const key = items.map((i) => `${i.id}:${i.unitCost}:${(i.images ?? []).length}`).join("|");
-  if (key === uploadedKey && SYSTEM_BY_ID.size > 0) return;
-  uploadedKey = key;
-  for (let i = LIGHTING_SYSTEMS.length - 1; i >= 0; i--) {
-    if (LIGHTING_SYSTEMS[i].uploaded) {
-      SYSTEM_BY_ID.delete(LIGHTING_SYSTEMS[i].id);
-      LIGHTING_SYSTEMS.splice(i, 1);
-    }
-  }
-  for (const item of items) {
-    const sys = { ...item, uploaded: true } as LightingSystem;
-    LIGHTING_SYSTEMS.push(sys);
-    SYSTEM_BY_ID.set(sys.id, sys);
+export function applyCatalogChanges(items: LightingSystem[], removed: string[] = []): void {
+  const key =
+    items.map((i) => `${i.id}:${i.unitCost}:${(i.images ?? []).length}`).join("|") +
+    "#" +
+    [...removed].sort().join("|");
+  if (key === changesKey) return;
+  changesKey = key;
+
+  for (const [id, sys] of SYSTEM_BY_ID) if (sys.uploaded) SYSTEM_BY_ID.delete(id);
+  const uploaded = items.map((item) => ({ ...item, uploaded: true }) as LightingSystem);
+  for (const sys of uploaded) SYSTEM_BY_ID.set(sys.id, sys);
+
+  const gone = new Set(removed);
+  LIGHTING_SYSTEMS.length = 0;
+  for (const sys of [...BUILTIN_SYSTEMS, ...uploaded]) {
+    if (!gone.has(sys.id)) LIGHTING_SYSTEMS.push(sys);
   }
 }
+
 const ACCESSORY_BY_ID = new Map(ACCESSORIES.map((a) => [a.id, a]));
 
 export function getSystem(id: string): LightingSystem | undefined {

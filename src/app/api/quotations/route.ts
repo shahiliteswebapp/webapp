@@ -7,7 +7,7 @@ import { createQuotation } from "@/lib/store";
 import { sendQuotationEmail } from "@/lib/email";
 import { renderQuotationPdf } from "@/lib/pdf/quotation-pdf";
 import { productPhotosForPdf } from "@/lib/pdf/product-images";
-import { loadUploadedCatalog } from "@/lib/catalog-store";
+import { loadCatalogChanges } from "@/lib/catalog-store";
 import type { DraftRoom } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
   }
 
   // Uploaded catalogue items must be known before pricing.
-  await loadUploadedCatalog({ fresh: true });
+  await loadCatalogChanges({ fresh: true });
 
   // Recompute totals server-side. Client numbers are never trusted.
   const quote = computeQuote(rooms, { applyGst: body.applyGst !== false });

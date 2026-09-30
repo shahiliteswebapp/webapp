@@ -1,6 +1,6 @@
 import { AppShell } from "@/components/app-shell";
 import { CatalogHydrator } from "@/components/catalog-hydrator";
-import { loadUploadedCatalog } from "@/lib/catalog-store";
+import { loadCatalogChanges } from "@/lib/catalog-store";
 import { requireSession } from "@/lib/session";
 
 export default async function AppGroupLayout({
@@ -8,10 +8,10 @@ export default async function AppGroupLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [session, uploaded] = await Promise.all([requireSession(), loadUploadedCatalog()]);
+  const [session, changes] = await Promise.all([requireSession(), loadCatalogChanges()]);
   return (
     <AppShell session={session}>
-      <CatalogHydrator items={uploaded}>{children}</CatalogHydrator>
+      <CatalogHydrator items={changes.items} removed={changes.removed}>{children}</CatalogHydrator>
     </AppShell>
   );
 }

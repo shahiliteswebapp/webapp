@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { AwsClient } from "aws4fetch";
-import { registerUploadedSystems, type LightingSystem } from "./catalog";
+import { applyCatalogChanges, type LightingSystem } from "./catalog";
 
 /*
  * Superadmin-uploaded catalogue items and their photos.
@@ -85,27 +85,44 @@ export async function readLocalCatalogImage(name: string): Promise<Buffer | null
   }
 }
 
-/* ------------------------------ the item list ------------------------------ */
+/* ------------------------- uploaded items + removals ------------------------- */
 
+/** Everything a superadmin changed: uploaded items, and ids removed from the picker. */
+export interface CatalogChanges {
+  items: LightingSystem[];
+  removed: string[];
+}
+
+const EMPTY: CatalogChanges = { items: [], removed: [] };
 const TTL_MS = 15_000;
-let cache: { at: number; items: LightingSystem[] } | null = null;
+let cache: { at: number; state: CatalogChanges } | null = null;
 
-async function readList(): Promise<LightingSystem[]> {
+// Older saves were a bare array of items.
+function normalise(raw: unknown): CatalogChanges {
+  if (Array.isArray(raw)) return { items: raw as LightingSystem[], removed: [] };
+  const o = (raw ?? {}) as Partial<CatalogChanges>;
+  return {
+    items: Array.isArray(o.items) ? o.items : [],
+    removed: Array.isArray(o.removed) ? o.removed.filter((x) => typeof x === "string") : [],
+  };
+}
+
+async function readState(): Promise<CatalogChanges> {
   if (r2Configured()) {
     const res = await client().fetch(objectUrl(LIST_KEY), { cache: "no-store" });
-    if (res.status === 404) return [];
+    if (res.status === 404) return EMPTY;
     if (!res.ok) throw new Error(`R2 read failed (${res.status})`);
-    return (await res.json()) as LightingSystem[];
+    return normalise(await res.json());
   }
   try {
-    return JSON.parse(await fs.readFile(LOCAL_LIST, "utf8")) as LightingSystem[];
+    return normalise(JSON.parse(await fs.readFile(LOCAL_LIST, "utf8")));
   } catch {
-    return [];
+    return EMPTY;
   }
 }
 
-async function writeList(items: LightingSystem[]): Promise<void> {
-  const body = JSON.stringify(items);
+async function writeState(state: CatalogChanges): Promise<void> {
+  const body = JSON.stringify(state);
   if (r2Configured()) {
     const res = await client().fetch(objectUrl(LIST_KEY), {
       method: "PUT",
@@ -122,47 +139,61 @@ async function writeList(items: LightingSystem[]): Promise<void> {
     await fs.writeFile(tmp, body, "utf8");
     await fs.rename(tmp, LOCAL_LIST);
   }
-  cache = { at: Date.now(), items };
-  registerUploadedSystems(items);
+  cache = { at: Date.now(), state };
+  applyCatalogChanges(state.items, state.removed);
 }
 
 /**
- * Uploaded items, also merged into the in-memory catalogue so getSystem()
- * and the pricing engine see them. Never throws: on a storage error the app
- * keeps working with the built-in catalogue.
+ * The superadmin's catalogue changes, also applied to the in-memory catalogue
+ * so getSystem() and the pricing engine see them. Never throws: on a storage
+ * error the app keeps working with the built-in catalogue.
  */
-export async function loadUploadedCatalog(
+export async function loadCatalogChanges(
   opts: { fresh?: boolean } = {},
-): Promise<LightingSystem[]> {
-  // The cache is per server instance, so pricing and the admin list read fresh.
-  if (!opts.fresh && cache && Date.now() - cache.at < TTL_MS) return cache.items;
+): Promise<CatalogChanges> {
+  // The cache is per server instance, so pricing and the admin page read fresh.
+  if (!opts.fresh && cache && Date.now() - cache.at < TTL_MS) return cache.state;
   try {
-    const items = await readList();
-    cache = { at: Date.now(), items };
-    registerUploadedSystems(items);
-    return items;
+    const state = await readState();
+    cache = { at: Date.now(), state };
+    applyCatalogChanges(state.items, state.removed);
+    return state;
   } catch (err) {
-    console.error("Could not load uploaded catalogue", err);
-    return cache?.items ?? [];
+    console.error("Could not load catalogue changes", err);
+    return cache?.state ?? EMPTY;
   }
 }
 
-/** Add or replace items (matched by id). */
+/** Add or replace uploaded items (matched by id). Re-uploading an item un-removes it. */
 export async function upsertUploadedItems(items: LightingSystem[]): Promise<number> {
   cache = null;
-  const current = await readList();
-  const byId = new Map(current.map((i) => [i.id, i]));
+  const current = await readState();
+  const byId = new Map(current.items.map((i) => [i.id, i]));
   for (const item of items) byId.set(item.id, { ...item, uploaded: true } as LightingSystem);
+  const ids = new Set(items.map((i) => i.id));
   const next = [...byId.values()];
-  await writeList(next);
+  await writeState({ items: next, removed: current.removed.filter((id) => !ids.has(id)) });
   return next.length;
 }
 
 export async function deleteUploadedItems(ids: string[] | "all"): Promise<number> {
   cache = null;
-  const current = await readList();
+  const current = await readState();
   const drop = ids === "all" ? null : new Set(ids);
-  const next = drop ? current.filter((i) => !drop.has(i.id)) : [];
-  await writeList(next);
+  const next = drop ? current.items.filter((i) => !drop.has(i.id)) : [];
+  await writeState({ ...current, items: next });
   return next.length;
+}
+
+/** Hide built-in items from the picker (remove: true) or bring them back. */
+export async function setRemoved(ids: string[], remove: boolean): Promise<number> {
+  cache = null;
+  const current = await readState();
+  const set = new Set(current.removed);
+  for (const id of ids) {
+    if (remove) set.add(id);
+    else set.delete(id);
+  }
+  await writeState({ ...current, removed: [...set] });
+  return set.size;
 }

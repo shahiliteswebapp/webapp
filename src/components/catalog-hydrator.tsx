@@ -1,18 +1,21 @@
 "use client";
 
-import { registerUploadedSystems, type LightingSystem } from "@/lib/catalog";
+import { applyCatalogChanges, type LightingSystem } from "@/lib/catalog";
 
 /*
- * Merges the superadmin-uploaded catalogue into the browser's copy of the
- * catalogue. Runs during render, before any child page reads the catalogue.
+ * Applies the superadmin's catalogue changes (uploaded items, removed items)
+ * to the browser's copy of the catalogue. Runs during render, before any
+ * child page reads the catalogue.
  */
 export function CatalogHydrator({
   items,
+  removed,
   children,
 }: {
   items: LightingSystem[];
+  removed: string[];
   children: React.ReactNode;
 }) {
-  registerUploadedSystems(items);
+  applyCatalogChanges(items, removed);
   return children;
 }
