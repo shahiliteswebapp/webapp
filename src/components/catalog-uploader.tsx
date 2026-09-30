@@ -115,7 +115,10 @@ export function CatalogUploader({ existing }: { existing: LightingSystem[] }) {
 
     const items = parsed.rows.map((row, i) => ({
       ...row.item,
-      images: match.byRow[i].map((f) => urls.get(f)).filter((u): u is string => !!u),
+      images: [
+        ...(row.item.images ?? []), // direct links from the Image column
+        ...match.byRow[i].map((f) => urls.get(f)).filter((u): u is string => !!u),
+      ],
     }));
 
     try {
@@ -172,7 +175,8 @@ export function CatalogUploader({ existing }: { existing: LightingSystem[] }) {
             Auto/Non auto, Control, Interface / Decor type, Size, Decor mounting, Style).
           </p>
           <p className="text-xs text-faint">
-            Optional columns: Price, Code, Name, Cutout, Finish, Colour, Material, IP, Unit, Image.
+            Optional columns: Price, Code, Name, Cutout, Finish, Colour, Material, IP, Unit, Image
+            (photo file names or direct https photo links).
             Photos match a row by the Image column, by Code (GCL-110.jpg), or by tab and S. No.
             (F-1.jpg, D-3.jpg; F-1_2.jpg for a second photo). Up to {MAX_PHOTOS} photos at a time.
             Re-uploading the same row updates it.
@@ -271,7 +275,7 @@ export function CatalogUploader({ existing }: { existing: LightingSystem[] }) {
                         it.kind === "functional"
                           ? [it.watt, it.layer ? `Layer ${it.layer}` : null, it.glare, it.automatic ? "Auto" : "Non auto", it.interfaceOptions.map((o) => o.interface).join(", ")]
                           : [it.decorType, it.size, it.mounting, it.style];
-                      const n = match?.byRow[i].length ?? 0;
+                      const n = (match?.byRow[i].length ?? 0) + (it.images?.length ?? 0);
                       return (
                         <tr key={it.id} className="align-top">
                           <td className="px-3 py-2 text-faint">

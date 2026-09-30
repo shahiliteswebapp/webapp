@@ -12,7 +12,7 @@
  *
  * Optional extra columns on either tab: Price (or Rate / MRP), Code (or SKU /
  * Model), Name, Size, Cutout, Finish, Colour, Material, IP, Image (photo file
- * names, comma separated), Unit (nos / mtr).
+ * names or direct https photo links, comma separated), Unit (nos / mtr).
  *
  * Photos are matched to rows by, in order: the Image column; a file named
  * after the row's Code; a file named "<tab>-<S. No.>" such as "functional-1",
@@ -219,7 +219,13 @@ export function parseCatalogWorkbook(sheets: SheetInput[], sourceName: string): 
       seen.add(id);
 
       const unit: Unit = norm(get("unit")).startsWith("m") ? "mtr" : "nos";
-      const imageNames = splitList(get("image"));
+      // Image column: photo file names, or direct https links to a photo.
+      const imageCells = get("image")
+        .split(/[,;\n]+/)
+        .map((x) => x.trim())
+        .filter(Boolean);
+      const imageUrls = imageCells.filter((x) => /^https:\/\//i.test(x));
+      const imageNames = imageCells.filter((x) => !/^https?:\/\//i.test(x));
       const matchKeys = [
         ...(code ? [norm(code)] : []),
         ...tabKey.map((t) => norm(`${t}-${sno}`)),
@@ -233,7 +239,7 @@ export function parseCatalogWorkbook(sheets: SheetInput[], sourceName: string): 
         unitCost: price && price > 0 ? price : 0,
         rules: [] as AccessoryRule[],
         source: `${sourceName} · ${sheet} row ${r + 1}`,
-        images: [] as string[],
+        images: imageUrls,
         uploaded: true,
         company: company || null,
       };
@@ -252,7 +258,6 @@ export function parseCatalogWorkbook(sheets: SheetInput[], sourceName: string): 
         const glareText = norm(get("glare"));
         const item: FunctionalSystem = {
           ...base,
-          images: [],
           kind: "functional",
           category: type || "Functional",
           layer,
@@ -275,7 +280,6 @@ export function parseCatalogWorkbook(sheets: SheetInput[], sourceName: string): 
         const mountings = splitList(get("mounting"));
         const item: DecorativeSystem = {
           ...base,
-          images: [],
           kind: "decorative",
           automatic: false,
           interfaceOptions: [],
