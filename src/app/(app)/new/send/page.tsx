@@ -74,6 +74,7 @@ export default function SendPage() {
         status: data.status ?? "",
         saved: data.savedTo ?? "",
       });
+      if (!quote.applyGst) q.set("gst", "0");
       if (data.emailError) q.set("emailError", data.emailError);
       router.replace(`/new/sent?${q.toString()}`);
     } catch {

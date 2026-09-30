@@ -14,7 +14,7 @@ const ITEMS = [
 const SUPERADMIN_ITEMS = [
   { href: "/review", label: "Review queue", desc: "Approve or reject" },
   { href: "/admin", label: "Access", desc: "Add or remove Gmail IDs" },
-  { href: "/admin/catalog", label: "Catalogue", desc: "Upload products + photos" },
+  { href: "/admin/catalog", label: "Catalogue", desc: "Add, remove, restore products" },
 ];
 
 export function PlusWidget({ isSuperadmin = false }: { isSuperadmin?: boolean }) {

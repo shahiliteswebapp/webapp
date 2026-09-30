@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, ButtonLink, Card, Eyebrow } from "@/components/ui";
-import { COMPANY, DISCLAIMER } from "@/lib/config";
+import { COMPANY, disclaimer } from "@/lib/config";
 
 function base64ToBlob(b64: string, type = "application/pdf"): Blob {
   const bin = atob(b64);
@@ -19,6 +19,7 @@ function SentInner() {
   const status = params.get("status");
   const saved = params.get("saved");
   const emailError = params.get("emailError");
+  const applyGst = params.get("gst") !== "0";
   const forReview = status === "submitted_for_review";
 
   const [pdf, setPdf] = useState<string | null>(null);
@@ -120,7 +121,7 @@ function SentInner() {
         )}
 
         <p className="rounded-md border border-gold/40 bg-gold-tint px-3 py-2 text-xs text-ink-deep">
-          {DISCLAIMER}
+          {disclaimer(applyGst)}
         </p>
       </Card>
 
