@@ -8,14 +8,33 @@ import {
   type Unit,
 } from "./catalog";
 import { QUOTE } from "./config";
-import { round2 } from "./format";
-import type { DraftRoom } from "./types";
+import { money0, round2 } from "./format";
+import type { DraftRoom, Discount } from "./types";
 
 /*
  * Pure pricing engine. No IO. Given the wizard's rooms, produce a fully costed
- * breakdown (systems + rule-derived accessories + GST). Used live in the UI and
- * again when building the PDF so the two never disagree.
+ * breakdown (systems + rule-derived accessories + discounts + GST). Used live
+ * in the UI and again when building the PDF so the two never disagree.
+ *
+ * Discounts stack in order: per line (qty x rate), then per room (on the room
+ * total after line discounts), then per quotation (on the sum of rooms).
+ * GST is charged on what is left.
  */
+
+/** Rupee amount a discount takes off `base`, never more than `base`. */
+export function discountAmount(base: number, d: Discount | undefined): number {
+  if (!d || !(base > 0)) return 0;
+  const v = Number(d.value);
+  if (!Number.isFinite(v) || v <= 0) return 0;
+  const amt = d.kind === "pct" ? (base * Math.min(v, 100)) / 100 : v;
+  return round2(Math.min(amt, base));
+}
+
+/** "10%" or "₹500", for labels. Empty when there is no discount. */
+export function discountLabel(d: Discount | undefined): string {
+  if (!d || !(Number(d.value) > 0)) return "";
+  return d.kind === "pct" ? `${Math.min(Number(d.value), 100)}%` : money0(Number(d.value));
+}
 
 export interface ComputedSystemLine {
   /** systemId + variant + price: unique within a room */
@@ -26,6 +45,13 @@ export interface ComputedSystemLine {
   unitLabel: string;
   qty: number;
   unitCost: number;
+  /** qty x rate, before the line discount */
+  gross: number;
+  /** rupees taken off by the line discount */
+  discount: number;
+  /** e.g. "10%" or "₹500"; empty when none */
+  discountLabel: string;
+  /** after the line discount */
   total: number;
   /** first product photo URL, if the catalogue has one */
   image?: string;
@@ -48,11 +74,25 @@ export interface ComputedRoom {
   accessories: ComputedAccessory[];
   systemsTotal: number;
   accessoriesTotal: number;
+  /** lighting + accessories, after line discounts, before the room discount */
+  beforeDiscount: number;
+  /** rupees taken off by the room discount */
+  discount: number;
+  discountLabel: string;
+  /** after the room discount */
   subtotal: number;
 }
 
 export interface ComputedQuote {
   rooms: ComputedRoom[];
+  /** sum of room subtotals, before the quotation discount */
+  roomsTotal: number;
+  /** rupees taken off by the quotation discount */
+  discount: number;
+  discountLabel: string;
+  /** every discount on the quotation added up (lines + rooms + quotation) */
+  totalSavings: number;
+  /** taxable amount: rooms total minus the quotation discount */
   subtotal: number;
   /** false when the employee chose not to charge GST */
   applyGst: boolean;
@@ -66,7 +106,7 @@ export function computeRoom(room: DraftRoom): ComputedRoom {
   // be added on several lines; different automation variants stay separate).
   const groups = new Map<
     string,
-    { systemId: string; label: string; unitCost: number; qty: number }
+    { systemId: string; label: string; unitCost: number; qty: number; disc?: Discount; flat: number }
   >();
   const qtyBySystem = new Map<string, number>();
   for (const line of room.lines) {
@@ -76,9 +116,14 @@ export function computeRoom(room: DraftRoom): ComputedRoom {
     if (!sys) continue;
     const unitCost = unitPriceFor(sys, line);
     const label = variantLabel(line);
-    const key = `${line.systemId}|${label}|${unitCost}`;
-    const g = groups.get(key) ?? { systemId: line.systemId, label, unitCost, qty: 0 };
+    const d = line.discount && Number(line.discount.value) > 0 ? line.discount : undefined;
+    // Lines only merge when their discount matches too.
+    const key = `${line.systemId}|${label}|${unitCost}|${d ? `${d.kind}:${d.value}` : ""}`;
+    const g =
+      groups.get(key) ?? { systemId: line.systemId, label, unitCost, qty: 0, disc: d, flat: 0 };
     g.qty += qty;
+    // A rupee discount is per line, so two merged lines get it twice.
+    if (d?.kind === "amt") g.flat += discountAmount(round2(unitCost * qty), d);
     groups.set(key, g);
     qtyBySystem.set(line.systemId, (qtyBySystem.get(line.systemId) ?? 0) + qty);
   }
@@ -91,6 +136,8 @@ export function computeRoom(room: DraftRoom): ComputedRoom {
 
   for (const [key, g] of groups) {
     const sys = getSystem(g.systemId)!;
+    const gross = round2(g.unitCost * g.qty);
+    const discount = g.disc?.kind === "amt" ? Math.min(g.flat, gross) : discountAmount(gross, g.disc);
     systems.push({
       key,
       systemId: g.systemId,
@@ -99,7 +146,10 @@ export function computeRoom(room: DraftRoom): ComputedRoom {
       unitLabel: UNIT_LABEL[sys.unit],
       qty: g.qty,
       unitCost: g.unitCost,
-      total: round2(g.unitCost * g.qty),
+      gross,
+      discount,
+      discountLabel: discount > 0 ? discountLabel(g.disc) : "",
+      total: round2(gross - discount),
       image: systemImages(sys)[0],
     });
   }
@@ -137,6 +187,8 @@ export function computeRoom(room: DraftRoom): ComputedRoom {
 
   const systemsTotal = round2(systems.reduce((s, l) => s + l.total, 0));
   const accessoriesTotal = round2(accessories.reduce((s, l) => s + l.total, 0));
+  const beforeDiscount = round2(systemsTotal + accessoriesTotal);
+  const discount = discountAmount(beforeDiscount, room.discount);
 
   return {
     roomId: room.id,
@@ -145,20 +197,36 @@ export function computeRoom(room: DraftRoom): ComputedRoom {
     accessories,
     systemsTotal,
     accessoriesTotal,
-    subtotal: round2(systemsTotal + accessoriesTotal),
+    beforeDiscount,
+    discount,
+    discountLabel: discount > 0 ? discountLabel(room.discount) : "",
+    subtotal: round2(beforeDiscount - discount),
   };
 }
 
 export function computeQuote(
   rooms: DraftRoom[],
-  opts: { applyGst?: boolean } = {},
+  opts: { applyGst?: boolean; discount?: Discount } = {},
 ): ComputedQuote {
   const applyGst = opts.applyGst !== false;
   const computed = rooms.map(computeRoom);
-  const subtotal = round2(computed.reduce((s, r) => s + r.subtotal, 0));
+  const roomsTotal = round2(computed.reduce((s, r) => s + r.subtotal, 0));
+  const discount = discountAmount(roomsTotal, opts.discount);
+  const subtotal = round2(roomsTotal - discount);
   const gstAmount = applyGst ? round2((subtotal * QUOTE.gstRatePct) / 100) : 0;
+  const totalSavings = round2(
+    discount +
+      computed.reduce(
+        (s, r) => s + r.discount + r.systems.reduce((t, l) => t + l.discount, 0),
+        0,
+      ),
+  );
   return {
     rooms: computed,
+    roomsTotal,
+    discount,
+    discountLabel: discount > 0 ? discountLabel(opts.discount) : "",
+    totalSavings,
     subtotal,
     applyGst,
     gstRatePct: QUOTE.gstRatePct,

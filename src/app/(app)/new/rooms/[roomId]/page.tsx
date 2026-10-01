@@ -10,7 +10,8 @@ import { Button, ButtonLink, Eyebrow } from "@/components/ui";
 import { UNIT_LABEL, getSystem, unitPriceFor, variantLabel } from "@/lib/catalog";
 import { useDraft } from "@/lib/draft/context";
 import { money } from "@/lib/format";
-import { computeRoom } from "@/lib/quote";
+import { computeRoom, discountAmount } from "@/lib/quote";
+import { DiscountInput } from "@/components/discount-input";
 import { cx } from "@/lib/cx";
 import { draftStarted, type RoomLine } from "@/lib/types";
 
@@ -23,7 +24,7 @@ function uid(): string {
 export default function RoomLightingPage() {
   const { roomId } = useParams<{ roomId: string }>();
   const router = useRouter();
-  const { loaded, draft, setRoomLines } = useDraft();
+  const { loaded, draft, setRoomLines, setRoomDiscount } = useDraft();
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
   const detailRefs = useRef(new Map<string, HTMLDivElement>());
@@ -95,6 +96,7 @@ export default function RoomLightingPage() {
           ? {
               id: l.id,
               qty: l.qty,
+              discount: l.discount,
               systemId: pick.systemId,
               interfaceTag: pick.interfaceTag,
               control: pick.control,
@@ -194,7 +196,8 @@ export default function RoomLightingPage() {
                   const unit = sys ? unitPriceFor(sys, line) : 0;
                   const needsRate =
                     !!sys && sys.unitCost <= 0 && unitPriceFor(sys, { ...line, unitPrice: 0 }) <= 0;
-                  const lineTotal = unit * (line.qty || 0);
+                  const lineGross = unit * (line.qty || 0);
+                  const lineTotal = lineGross - discountAmount(lineGross, line.discount);
                   return (
                     <li
                       key={line.id}
@@ -271,14 +274,22 @@ export default function RoomLightingPage() {
                               />
                             </label>
                           )}
-                        </div>
-                        <span
-                          className={cx(
-                            "text-sm tabular-nums",
-                            lineTotal > 0 ? "text-ink" : "text-faint",
+                          {sys && (
+                            <DiscountInput
+                              value={line.discount}
+                              onChange={(d) => patchLine(line.id, { discount: d })}
+                            />
                           )}
-                        >
-                          {money(lineTotal)}
+                        </div>
+                        <span className="text-right text-sm tabular-nums">
+                          {lineTotal < lineGross && (
+                            <span className="mr-1.5 text-xs text-faint line-through">
+                              {money(lineGross)}
+                            </span>
+                          )}
+                          <span className={lineTotal > 0 ? "text-ink" : "text-faint"}>
+                            {money(lineTotal)}
+                          </span>
                         </span>
                       </div>
                       {needsRate && !line.unitPrice && (
@@ -352,8 +363,20 @@ export default function RoomLightingPage() {
               <span>
                 Lighting {money(computed.systemsTotal)} · Connectors/drivers{" "}
                 {money(computed.accessoriesTotal)}
+                {computed.discount > 0 && (
+                  <>
+                    {" "}
+                    · Room discount{computed.discountLabel.endsWith("%") ? ` (${computed.discountLabel})` : ""} −{money(computed.discount)}
+                  </>
+                )}
               </span>
             </div>
+            <DiscountInput
+              label="Room discount"
+              className="mt-2"
+              value={room.discount}
+              onChange={(d) => setRoomDiscount(room.id, d)}
+            />
             <p className="mt-1 text-xs text-faint">
               GST is added once, on the final quotation.
             </p>

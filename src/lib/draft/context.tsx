@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { DraftBlueprint, QuoteDraft, RoomLine } from "@/lib/types";
+import type { Discount, DraftBlueprint, QuoteDraft, RoomLine } from "@/lib/types";
 import { idbClear, idbGet, idbSet } from "./idb";
 
 interface DraftContextValue {
@@ -20,6 +20,8 @@ interface DraftContextValue {
   /** start a quotation with no blueprint */
   skipBlueprint: () => void;
   setApplyGst: (v: boolean) => void;
+  setRoomDiscount: (id: string, d: Discount | undefined) => void;
+  setQuoteDiscount: (d: Discount | undefined) => void;
   addRoom: (name: string) => void;
   addRooms: (names: string[]) => void;
   renameRoom: (id: string, name: string) => void;
@@ -124,6 +126,27 @@ export function DraftProvider({ children }: { children: ReactNode }) {
     [mutate],
   );
 
+  const setRoomDiscount = useCallback(
+    (id: string, d: Discount | undefined) => {
+      mutate((draft) => {
+        const room = draft.rooms.find((r) => r.id === id);
+        if (room) room.discount = d;
+        return draft;
+      });
+    },
+    [mutate],
+  );
+
+  const setQuoteDiscount = useCallback(
+    (d: Discount | undefined) => {
+      mutate((draft) => {
+        draft.discount = d;
+        return draft;
+      });
+    },
+    [mutate],
+  );
+
   const addRoom = useCallback(
     (name: string) => {
       const trimmed = name.trim();
@@ -214,6 +237,8 @@ export function DraftProvider({ children }: { children: ReactNode }) {
       setBlueprint,
       skipBlueprint,
       setApplyGst,
+      setRoomDiscount,
+      setQuoteDiscount,
       addRoom,
       addRooms,
       renameRoom,
@@ -229,6 +254,8 @@ export function DraftProvider({ children }: { children: ReactNode }) {
       setBlueprint,
       skipBlueprint,
       setApplyGst,
+      setRoomDiscount,
+      setQuoteDiscount,
       addRoom,
       addRooms,
       renameRoom,

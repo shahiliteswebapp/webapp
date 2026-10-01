@@ -95,6 +95,12 @@ export interface DraftBlueprint {
   pageCount: number;
 }
 
+/** A discount: a percentage, or a fixed rupee amount. */
+export interface Discount {
+  kind: "pct" | "amt";
+  value: number;
+}
+
 export interface RoomLine {
   id: string;
   systemId: string;
@@ -104,12 +110,16 @@ export interface RoomLine {
   control?: "dimmable" | "tunable";
   /** employee-entered rate, only used when the catalogue has no price */
   unitPrice?: number;
+  /** discount on this line (qty x rate) */
+  discount?: Discount;
 }
 
 export interface DraftRoom {
   id: string;
   name: string;
   lines: RoomLine[];
+  /** discount on the room total, after line discounts */
+  discount?: Discount;
 }
 
 export interface QuoteDraft {
@@ -120,6 +130,8 @@ export interface QuoteDraft {
   noBlueprint?: boolean;
   /** charge GST on the quotation (default true) */
   applyGst?: boolean;
+  /** discount on the whole quotation, after room discounts, before GST */
+  discount?: Discount;
   rooms: DraftRoom[];
 }
 

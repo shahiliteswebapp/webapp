@@ -32,7 +32,10 @@ export default function SendPage() {
     );
   }
 
-  const quote = computeQuote(draft.rooms, { applyGst: draft.applyGst });
+  const quote = computeQuote(draft.rooms, {
+    applyGst: draft.applyGst,
+    discount: draft.discount,
+  });
   const canSend = quote.grandTotal > 0;
 
   const submit = async (action: Action) => {
@@ -50,6 +53,7 @@ export default function SendPage() {
           blueprintPreviewDataUrl: thumb,
           blueprintName: draft.blueprint?.name,
           applyGst: quote.applyGst,
+          discount: draft.discount,
           action,
         }),
       });
@@ -107,6 +111,12 @@ export default function SendPage() {
               <dt className="text-muted">Rooms</dt>
               <dd className="text-ink">{draft.rooms.length}</dd>
             </div>
+            {quote.totalSavings > 0 && (
+              <div className="flex justify-between">
+                <dt className="text-muted">Discounts (lines, rooms, quotation)</dt>
+                <dd className="tabular-nums text-ink">−{money(quote.totalSavings)}</dd>
+              </div>
+            )}
             <div className="flex justify-between">
               <dt className="text-muted">Subtotal</dt>
               <dd className="tabular-nums text-ink">{money(quote.subtotal)}</dd>

@@ -169,6 +169,14 @@ const s = StyleSheet.create({
   cUnit: { width: 34, textAlign: "right", color: MUTED },
   cRate: { width: 78, textAlign: "right" },
   cAmt: { width: 88, textAlign: "right" },
+  cDisc: { width: 62, textAlign: "right", color: MUTED },
+  discLine: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: 8,
+    fontSize: 8.5,
+    color: MUTED,
+  },
   subRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
@@ -256,6 +264,9 @@ const s = StyleSheet.create({
   },
 });
 
+/** " (10%)" for a percentage discount; nothing for a rupee one (the amount is shown). */
+const pctNote = (label: string) => (label.endsWith("%") ? ` (${label})` : "");
+
 function Watermark() {
   return (
     <Text style={s.watermark} fixed>
@@ -296,8 +307,9 @@ function LineTable({
   room: ComputedRoom;
   photos: Record<string, string>;
 }) {
-  // The photo column only appears when at least one line has a photo.
+  // The photo / discount columns only appear when some line needs them.
   const withPhotos = room.systems.some((l) => l.image && photos[l.image]);
+  const withDisc = room.systems.some((l) => l.discount > 0);
   return (
     <View>
       <View style={s.tHead}>
@@ -306,6 +318,7 @@ function LineTable({
         <Text style={[s.tHeadCell, s.cQty]}>Qty</Text>
         <Text style={[s.tHeadCell, s.cUnit]}>Unit</Text>
         <Text style={[s.tHeadCell, s.cRate]}>Rate</Text>
+        {withDisc && <Text style={[s.tHeadCell, s.cDisc]}>Discount</Text>}
         <Text style={[s.tHeadCell, s.cAmt]}>Amount</Text>
       </View>
 
@@ -326,6 +339,9 @@ function LineTable({
           <Text style={s.cQty}>{l.qty}</Text>
           <Text style={s.cUnit}>{l.unitLabel}</Text>
           <Text style={s.cRate}>{rs(l.unitCost)}</Text>
+          {withDisc && (
+            <Text style={s.cDisc}>{l.discount > 0 ? `${l.discountLabel}` : ""}</Text>
+          )}
           <Text style={s.cAmt}>{rs(l.total)}</Text>
         </View>
       ))}
@@ -340,6 +356,7 @@ function LineTable({
           <Text style={s.cQty}>{a.qty}</Text>
           <Text style={s.cUnit}>nos</Text>
           <Text style={s.cRate}>{rs(a.unitCost)}</Text>
+          {withDisc && <Text style={s.cDisc} />}
           <Text style={s.cAmt}>{rs(a.total)}</Text>
         </View>
       ))}
@@ -347,6 +364,15 @@ function LineTable({
       {room.systems.length === 0 && room.accessories.length === 0 && (
         <View style={s.tRow}>
           <Text style={[s.cDesc, { color: MUTED }]}>No lighting specified.</Text>
+        </View>
+      )}
+
+      {room.discount > 0 && (
+        <View style={s.discLine}>
+          <Text style={{ marginRight: 18 }}>
+            Total {rs(room.beforeDiscount)} · Room discount{pctNote(room.discountLabel)}
+          </Text>
+          <Text>−{rs(room.discount)}</Text>
         </View>
       )}
 
@@ -494,6 +520,18 @@ function QuotationDoc({
         </View>
 
         <View style={s.totalsBox}>
+          {quote.discount > 0 && (
+            <>
+              <View style={s.totalsLine}>
+                <Text style={{ color: MUTED }}>Rooms total</Text>
+                <Text>{rs(quote.roomsTotal)}</Text>
+              </View>
+              <View style={s.totalsLine}>
+                <Text style={{ color: MUTED }}>Discount{pctNote(quote.discountLabel)}</Text>
+                <Text>−{rs(quote.discount)}</Text>
+              </View>
+            </>
+          )}
           <View style={s.totalsLine}>
             <Text style={{ color: MUTED }}>Subtotal</Text>
             <Text>{rs(quote.subtotal)}</Text>
@@ -513,6 +551,12 @@ function QuotationDoc({
             <Text style={s.grandLabel}>Grand Total</Text>
             <Text style={s.grandValue}>{rs(quote.grandTotal)}</Text>
           </View>
+          {quote.totalSavings > 0 && (
+            <View style={[s.totalsLine, { marginTop: 4 }]}>
+              <Text style={{ color: GOLD }}>Total discount (before GST)</Text>
+              <Text style={{ color: GOLD }}>{rs(quote.totalSavings)}</Text>
+            </View>
+          )}
         </View>
 
         <View style={s.disclaimer}>

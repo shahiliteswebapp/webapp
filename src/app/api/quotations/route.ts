@@ -8,7 +8,7 @@ import { sendQuotationEmail } from "@/lib/email";
 import { renderQuotationPdf } from "@/lib/pdf/quotation-pdf";
 import { productPhotosForPdf } from "@/lib/pdf/product-images";
 import { loadCatalogChanges } from "@/lib/catalog-store";
-import type { DraftRoom } from "@/lib/types";
+import type { Discount, DraftRoom } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +23,8 @@ interface Body {
   action?: "review" | "download";
   /** charge GST (default true) */
   applyGst?: boolean;
+  /** quotation-level discount (line and room discounts ride on `rooms`) */
+  discount?: Discount;
 }
 
 export async function POST(req: Request) {
@@ -47,7 +49,11 @@ export async function POST(req: Request) {
   await loadCatalogChanges({ fresh: true });
 
   // Recompute totals server-side. Client numbers are never trusted.
-  const quote = computeQuote(rooms, { applyGst: body.applyGst !== false });
+  const discount =
+    body.discount && (body.discount.kind === "pct" || body.discount.kind === "amt")
+      ? { kind: body.discount.kind, value: Number(body.discount.value) }
+      : undefined;
+  const quote = computeQuote(rooms, { applyGst: body.applyGst !== false, discount });
   if (quote.grandTotal <= 0) {
     return NextResponse.json(
       { error: "Add lighting to at least one room first." },

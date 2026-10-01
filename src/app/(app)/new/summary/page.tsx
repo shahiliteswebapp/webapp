@@ -8,12 +8,13 @@ import { Button, ButtonLink, Eyebrow } from "@/components/ui";
 import { useDraft } from "@/lib/draft/context";
 import { money } from "@/lib/format";
 import { computeQuote } from "@/lib/quote";
+import { DiscountInput } from "@/components/discount-input";
 import { cx } from "@/lib/cx";
 import { draftStarted } from "@/lib/types";
 
 export default function SummaryPage() {
   const router = useRouter();
-  const { loaded, draft, addRoom, removeRoom, setApplyGst } = useDraft();
+  const { loaded, draft, addRoom, removeRoom, setApplyGst, setQuoteDiscount } = useDraft();
   const [newRoom, setNewRoom] = useState("");
 
   useEffect(() => {
@@ -28,7 +29,10 @@ export default function SummaryPage() {
     );
   }
 
-  const quote = computeQuote(draft.rooms, { applyGst: draft.applyGst });
+  const quote = computeQuote(draft.rooms, {
+    applyGst: draft.applyGst,
+    discount: draft.discount,
+  });
 
   const submitAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,6 +143,11 @@ export default function SummaryPage() {
                   </ul>
                 )}
 
+                {room.discount > 0 && (
+                  <p className="mt-2 text-xs text-muted">
+                    Room discount{room.discountLabel.endsWith("%") ? ` (${room.discountLabel})` : ""} −{money(room.discount)}
+                  </p>
+                )}
                 <div className="mt-3 flex items-center justify-between border-t border-hairline pt-2">
                   <span className="text-xs uppercase tracking-wider text-faint">
                     Room total
@@ -172,6 +181,22 @@ export default function SummaryPage() {
           {/* Totals */}
           <div className="rounded-[var(--radius-card)] border border-gold/40 bg-gold-tint/50 p-4">
             <dl className="space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-muted">Rooms total</dt>
+                <dd className="tabular-nums text-ink">{money(quote.roomsTotal)}</dd>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <dt>
+                  <DiscountInput
+                    label="Quotation discount"
+                    value={draft.discount}
+                    onChange={setQuoteDiscount}
+                  />
+                </dt>
+                <dd className="tabular-nums text-ink">
+                  {quote.discount > 0 ? `−${money(quote.discount)}` : "-"}
+                </dd>
+              </div>
               <div className="flex justify-between">
                 <dt className="text-muted">Subtotal</dt>
                 <dd className="tabular-nums text-ink">
