@@ -9,7 +9,7 @@ import {
 } from "./catalog";
 import { QUOTE } from "./config";
 import { money0, round2 } from "./format";
-import type { DraftRoom, Discount } from "./types";
+import { choiceFor, optionCountOf, type DraftRoom, type Discount, type QuoteDraft } from "./types";
 
 /*
  * Pure pricing engine. No IO. Given the wizard's rooms, produce a fully costed
@@ -19,6 +19,10 @@ import type { DraftRoom, Discount } from "./types";
  * Discounts stack in order: per line (qty x rate), then per room (on the room
  * total after line discounts), then per quotation (on the sum of rooms).
  * GST is charged on what is left.
+ *
+ * A quotation can offer up to three options (alternative lights for the same
+ * rooms). Each option is priced on its own: computeRoom / computeQuote take
+ * the 0-based option index; computeOptions prices them all.
  */
 
 /** Rupee amount a discount takes off `base`, never more than `base`. */
@@ -57,6 +61,23 @@ export interface ComputedSystemLine {
   image?: string;
 }
 
+/** One light in a room, in one option, before any merging. */
+export interface ComputedLine {
+  lineId: string;
+  systemId: string;
+  name: string;
+  unitLabel: string;
+  qty: number;
+  unitCost: number;
+  gross: number;
+  discount: number;
+  discountLabel: string;
+  total: number;
+  image?: string;
+  /** same light as Option 1 (no alternative picked) */
+  inherited: boolean;
+}
+
 export interface ComputedAccessory {
   accessoryId: string;
   name: string;
@@ -70,6 +91,9 @@ export interface ComputedAccessory {
 export interface ComputedRoom {
   roomId: string;
   name: string;
+  /** every light line in entry order (the PDF lists these) */
+  lines: ComputedLine[];
+  /** lines merged by system + variant + price + discount, A-Z */
   systems: ComputedSystemLine[];
   accessories: ComputedAccessory[];
   systemsTotal: number;
@@ -101,31 +125,59 @@ export interface ComputedQuote {
   grandTotal: number;
 }
 
-export function computeRoom(room: DraftRoom): ComputedRoom {
+export function computeRoom(room: DraftRoom, opt = 0): ComputedRoom {
   // Aggregate line quantities by system + variant + price (the same system can
   // be added on several lines; different automation variants stay separate).
   const groups = new Map<
     string,
-    { systemId: string; label: string; unitCost: number; qty: number; disc?: Discount; flat: number }
+    {
+      systemId: string;
+      label: string;
+      unitCost: number;
+      qty: number;
+      disc?: Discount;
+      gross: number;
+      discount: number;
+    }
   >();
   const qtyBySystem = new Map<string, number>();
+  const lines: ComputedLine[] = [];
   for (const line of room.lines) {
     const qty = Number(line.qty);
-    if (!line.systemId || !Number.isFinite(qty) || qty <= 0) continue;
-    const sys = getSystem(line.systemId);
+    const choice = choiceFor(line, opt);
+    if (!choice.systemId || !Number.isFinite(qty) || qty <= 0) continue;
+    const sys = getSystem(choice.systemId);
     if (!sys) continue;
-    const unitCost = unitPriceFor(sys, line);
-    const label = variantLabel(line);
+    const unitCost = unitPriceFor(sys, choice);
+    const label = variantLabel(choice);
     const d = line.discount && Number(line.discount.value) > 0 ? line.discount : undefined;
+    // Each line is discounted on its own, then lines merge for display.
+    const gross = round2(unitCost * qty);
+    const discount = discountAmount(gross, d);
+    lines.push({
+      lineId: line.id,
+      systemId: choice.systemId,
+      name: label ? `${sys.name} (${label})` : sys.name,
+      unitLabel: UNIT_LABEL[sys.unit],
+      qty,
+      unitCost,
+      gross,
+      discount,
+      discountLabel: discount > 0 ? discountLabel(d) : "",
+      total: round2(gross - discount),
+      image: systemImages(sys)[0],
+      inherited: choice.inherited,
+    });
     // Lines only merge when their discount matches too.
-    const key = `${line.systemId}|${label}|${unitCost}|${d ? `${d.kind}:${d.value}` : ""}`;
+    const key = `${choice.systemId}|${label}|${unitCost}|${d ? `${d.kind}:${d.value}` : ""}`;
     const g =
-      groups.get(key) ?? { systemId: line.systemId, label, unitCost, qty: 0, disc: d, flat: 0 };
+      groups.get(key) ??
+      { systemId: choice.systemId, label, unitCost, qty: 0, disc: d, gross: 0, discount: 0 };
     g.qty += qty;
-    // A rupee discount is per line, so two merged lines get it twice.
-    if (d?.kind === "amt") g.flat += discountAmount(round2(unitCost * qty), d);
+    g.gross = round2(g.gross + gross);
+    g.discount = round2(g.discount + discount);
     groups.set(key, g);
-    qtyBySystem.set(line.systemId, (qtyBySystem.get(line.systemId) ?? 0) + qty);
+    qtyBySystem.set(choice.systemId, (qtyBySystem.get(choice.systemId) ?? 0) + qty);
   }
 
   const systems: ComputedSystemLine[] = [];
@@ -136,8 +188,7 @@ export function computeRoom(room: DraftRoom): ComputedRoom {
 
   for (const [key, g] of groups) {
     const sys = getSystem(g.systemId)!;
-    const gross = round2(g.unitCost * g.qty);
-    const discount = g.disc?.kind === "amt" ? Math.min(g.flat, gross) : discountAmount(gross, g.disc);
+    const { gross, discount } = g;
     systems.push({
       key,
       systemId: g.systemId,
@@ -193,6 +244,7 @@ export function computeRoom(room: DraftRoom): ComputedRoom {
   return {
     roomId: room.id,
     name: room.name,
+    lines,
     systems,
     accessories,
     systemsTotal,
@@ -206,10 +258,10 @@ export function computeRoom(room: DraftRoom): ComputedRoom {
 
 export function computeQuote(
   rooms: DraftRoom[],
-  opts: { applyGst?: boolean; discount?: Discount } = {},
+  opts: { applyGst?: boolean; discount?: Discount; option?: number } = {},
 ): ComputedQuote {
   const applyGst = opts.applyGst !== false;
-  const computed = rooms.map(computeRoom);
+  const computed = rooms.map((r) => computeRoom(r, opts.option ?? 0));
   const roomsTotal = round2(computed.reduce((s, r) => s + r.subtotal, 0));
   const discount = discountAmount(roomsTotal, opts.discount);
   const subtotal = round2(roomsTotal - discount);
@@ -233,6 +285,20 @@ export function computeQuote(
     gstAmount,
     grandTotal: round2(subtotal + gstAmount),
   };
+}
+
+/** Every option of a draft, priced: one ComputedQuote per option. */
+export function computeOptions(
+  draft: Pick<QuoteDraft, "rooms" | "applyGst" | "discount" | "optionCount">,
+): ComputedQuote[] {
+  return Array.from({ length: optionCountOf(draft) }, (_, option) =>
+    computeQuote(draft.rooms, { applyGst: draft.applyGst, discount: draft.discount, option }),
+  );
+}
+
+/** "Option 2" */
+export function optionLabel(opt: number): string {
+  return `Option ${opt + 1}`;
 }
 
 /** Systems used in a room, names only, A–Z (for the summary cards). */

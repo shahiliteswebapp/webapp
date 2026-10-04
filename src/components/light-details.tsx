@@ -106,7 +106,7 @@ export function LightDetails({
   if (compact) {
     return (
       <div className="flex gap-3 rounded-md border border-hairline bg-paper p-2">
-        <div className="flex w-28 shrink-0 flex-col gap-1">
+        <div className="flex w-40 shrink-0 flex-col gap-1">
           <div className="aspect-square overflow-hidden rounded bg-panel/60">
             {current ? <Photo key={current} src={current} alt={sys.name} /> : <NoPhoto />}
           </div>

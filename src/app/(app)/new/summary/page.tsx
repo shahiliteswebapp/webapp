@@ -7,14 +7,16 @@ import { WizardSteps } from "@/components/wizard-steps";
 import { Button, ButtonLink, Eyebrow } from "@/components/ui";
 import { useDraft } from "@/lib/draft/context";
 import { money } from "@/lib/format";
-import { computeQuote } from "@/lib/quote";
+import { computeOptions, optionLabel } from "@/lib/quote";
 import { DiscountInput } from "@/components/discount-input";
+import { OptionCountControl } from "@/components/option-count";
 import { cx } from "@/lib/cx";
 import { draftStarted } from "@/lib/types";
 
 export default function SummaryPage() {
   const router = useRouter();
-  const { loaded, draft, addRoom, removeRoom, setApplyGst, setQuoteDiscount } = useDraft();
+  const { loaded, draft, addRoom, removeRoom, setApplyGst, setQuoteDiscount, setOptionCount } =
+    useDraft();
   const [newRoom, setNewRoom] = useState("");
 
   useEffect(() => {
@@ -29,10 +31,9 @@ export default function SummaryPage() {
     );
   }
 
-  const quote = computeQuote(draft.rooms, {
-    applyGst: draft.applyGst,
-    discount: draft.discount,
-  });
+  const options = computeOptions(draft);
+  const quote = options[0];
+  const multi = options.length > 1;
 
   const submitAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,6 +69,14 @@ export default function SummaryPage() {
 
         {/* Room cards + totals */}
         <div className="flex min-w-0 flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted">
+              {multi
+                ? `${options.length} options, each priced in full.`
+                : "Offer the client up to 3 options."}
+            </p>
+            <OptionCountControl value={options.length} onChange={setOptionCount} />
+          </div>
           <div className="space-y-3">
             {quote.rooms.map((room, i) => (
               <div
@@ -114,6 +123,11 @@ export default function SummaryPage() {
                   </div>
                 </div>
 
+                {multi && (
+                  <p className="mt-1 text-[11px] uppercase tracking-wider text-faint">
+                    Option 1 lights
+                  </p>
+                )}
                 {room.systems.length === 0 ? (
                   <p className="mt-2 text-sm text-faint">
                     No lighting added yet.
@@ -148,19 +162,34 @@ export default function SummaryPage() {
                     Room discount{room.discountLabel.endsWith("%") ? ` (${room.discountLabel})` : ""} −{money(room.discount)}
                   </p>
                 )}
-                <div className="mt-3 flex items-center justify-between border-t border-hairline pt-2">
-                  <span className="text-xs uppercase tracking-wider text-faint">
-                    Room total
-                  </span>
-                  <span
-                    className={cx(
-                      "font-display text-lg tabular-nums",
-                      room.subtotal > 0 ? "text-ink-deep" : "text-faint",
-                    )}
-                  >
-                    {money(room.subtotal)}
-                  </span>
-                </div>
+                {multi ? (
+                  <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-hairline pt-2">
+                    {options.map((o, k) => (
+                      <div key={k}>
+                        <dt className="text-[11px] uppercase tracking-wider text-faint">
+                          {optionLabel(k)}
+                        </dt>
+                        <dd className="font-display text-lg tabular-nums text-ink-deep">
+                          {money(o.rooms[i].subtotal)}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : (
+                  <div className="mt-3 flex items-center justify-between border-t border-hairline pt-2">
+                    <span className="text-xs uppercase tracking-wider text-faint">
+                      Room total
+                    </span>
+                    <span
+                      className={cx(
+                        "font-display text-lg tabular-nums",
+                        room.subtotal > 0 ? "text-ink-deep" : "text-faint",
+                      )}
+                    >
+                      {money(room.subtotal)}
+                    </span>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -180,54 +209,72 @@ export default function SummaryPage() {
 
           {/* Totals */}
           <div className="rounded-[var(--radius-card)] border border-gold/40 bg-gold-tint/50 p-4">
-            <dl className="space-y-1.5 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-muted">Rooms total</dt>
-                <dd className="tabular-nums text-ink">{money(quote.roomsTotal)}</dd>
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <dt>
-                  <DiscountInput
-                    label="Quotation discount"
-                    value={draft.discount}
-                    onChange={setQuoteDiscount}
-                  />
-                </dt>
-                <dd className="tabular-nums text-ink">
-                  {quote.discount > 0 ? `−${money(quote.discount)}` : "-"}
-                </dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-muted">Subtotal</dt>
-                <dd className="tabular-nums text-ink">
-                  {money(quote.subtotal)}
-                </dd>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <dt>
-                  <label className="flex cursor-pointer items-center gap-2 text-muted">
-                    <input
-                      type="checkbox"
-                      checked={quote.applyGst}
-                      onChange={(e) => setApplyGst(e.target.checked)}
-                      className="h-4 w-4 accent-[var(--color-gold)]"
-                    />
-                    Charge GST @ {quote.gstRatePct}%
-                  </label>
-                </dt>
-                <dd className={cx("tabular-nums", quote.applyGst ? "text-ink" : "text-faint")}>
-                  {quote.applyGst ? money(quote.gstAmount) : "Not included"}
-                </dd>
-              </div>
-              <div className="flex justify-between border-t border-gold/30 pt-2">
-                <dt className="font-display text-xl text-ink-deep">
-                  Grand total
-                </dt>
-                <dd className="font-display text-xl tabular-nums text-ink-deep">
-                  {money(quote.grandTotal)}
-                </dd>
-              </div>
-            </dl>
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-2">
+              <DiscountInput
+                label={multi ? "Quotation discount (all options)" : "Quotation discount"}
+                value={draft.discount}
+                onChange={setQuoteDiscount}
+              />
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-muted">
+                <input
+                  type="checkbox"
+                  checked={quote.applyGst}
+                  onChange={(e) => setApplyGst(e.target.checked)}
+                  className="h-4 w-4 accent-[var(--color-gold)]"
+                />
+                Charge GST @ {quote.gstRatePct}%
+              </label>
+            </div>
+            <table className="w-full text-sm">
+              {multi && (
+                <thead>
+                  <tr className="text-[11px] uppercase tracking-wider text-faint">
+                    <th className="pb-1 text-left font-normal" />
+                    {options.map((_, k) => (
+                      <th key={k} className="pb-1 text-right font-normal">
+                        {optionLabel(k)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+              )}
+              <tbody>
+                {(
+                  [
+                    ["Rooms total", (q) => money(q.roomsTotal)],
+                    ["Quotation discount", (q) => (q.discount > 0 ? `−${money(q.discount)}` : "-")],
+                    ["Subtotal", (q) => money(q.subtotal)],
+                    [
+                      `GST @ ${quote.gstRatePct}%`,
+                      (q) => (q.applyGst ? money(q.gstAmount) : "Not included"),
+                    ],
+                  ] as [string, (q: (typeof options)[number]) => string][]
+                ).map(([label, cell]) => (
+                  <tr key={label}>
+                    <td className="py-0.5 text-muted">{label}</td>
+                    {options.map((q, k) => (
+                      <td
+                        key={k}
+                        className={cx(
+                          "py-0.5 text-right tabular-nums",
+                          !q.applyGst && label.startsWith("GST") ? "text-faint" : "text-ink",
+                        )}
+                      >
+                        {cell(q)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+                <tr className="border-t border-gold/30">
+                  <td className="pt-2 font-display text-xl text-ink-deep">Grand total</td>
+                  {options.map((q, k) => (
+                    <td key={k} className="pt-2 text-right font-display text-xl tabular-nums text-ink-deep">
+                      {money(q.grandTotal)}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-4">

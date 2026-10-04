@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { computeQuote } from "@/lib/quote";
+import { computeOptions } from "@/lib/quote";
 import { createQuotation } from "@/lib/store";
 import { sendQuotationEmail } from "@/lib/email";
 import { renderQuotationPdf } from "@/lib/pdf/quotation-pdf";
@@ -25,6 +25,8 @@ interface Body {
   applyGst?: boolean;
   /** quotation-level discount (line and room discounts ride on `rooms`) */
   discount?: Discount;
+  /** how many options (1 to 3); alternative lights ride on `rooms` */
+  optionCount?: number;
 }
 
 export async function POST(req: Request) {
@@ -53,16 +55,28 @@ export async function POST(req: Request) {
     body.discount && (body.discount.kind === "pct" || body.discount.kind === "amt")
       ? { kind: body.discount.kind, value: Number(body.discount.value) }
       : undefined;
-  const quote = computeQuote(rooms, { applyGst: body.applyGst !== false, discount });
-  if (quote.grandTotal <= 0) {
+  const options = computeOptions({
+    rooms,
+    applyGst: body.applyGst !== false,
+    discount,
+    optionCount: body.optionCount,
+  });
+  const quote = options[0];
+  if (options.some((q) => q.grandTotal <= 0)) {
     return NextResponse.json(
-      { error: "Add lighting to at least one room first." },
+      {
+        error:
+          options.length > 1
+            ? "Every option needs at least one priced light."
+            : "Add lighting to at least one room first.",
+      },
       { status: 400 },
     );
   }
 
   const forReview = body.action !== "download";
 
+  // The ledger keeps one amount: Option 1's grand total.
   const record = await createQuotation({
     employeeName: session.name,
     employeeEmail: session.email,
@@ -73,14 +87,14 @@ export async function POST(req: Request) {
   let pdf: Buffer;
   try {
     const photos = await productPhotosForPdf(
-      quote.rooms.flatMap((r) => r.systems.map((l) => l.image ?? "")),
+      options.flatMap((q) => q.rooms.flatMap((r) => r.lines.map((l) => l.image ?? ""))),
     );
     pdf = await renderQuotationPdf({
       photos,
       number: record.number,
       createdAtISO: record.createdAt,
       employeeName: session.name,
-      quote,
+      options,
       blueprintDataUrl: body.blueprintPreviewDataUrl,
       blueprintName: body.blueprintName,
     });
@@ -114,7 +128,7 @@ export async function POST(req: Request) {
       const r = await sendQuotationEmail({
         number: record.number,
         pdf,
-        grandTotal: quote.grandTotal,
+        optionTotals: options.map((q) => q.grandTotal),
         applyGst: quote.applyGst,
         employeeName: session.name,
         employeeEmail: session.email,

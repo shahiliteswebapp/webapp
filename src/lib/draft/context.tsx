@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { Discount, DraftBlueprint, QuoteDraft, RoomLine } from "@/lib/types";
+import { MAX_OPTIONS, type Discount, type DraftBlueprint, type QuoteDraft, type RoomLine } from "@/lib/types";
 import { idbClear, idbGet, idbSet } from "./idb";
 
 interface DraftContextValue {
@@ -22,6 +22,8 @@ interface DraftContextValue {
   setApplyGst: (v: boolean) => void;
   setRoomDiscount: (id: string, d: Discount | undefined) => void;
   setQuoteDiscount: (d: Discount | undefined) => void;
+  /** how many options (1 to 3) the quotation offers */
+  setOptionCount: (n: number) => void;
   addRoom: (name: string) => void;
   addRooms: (names: string[]) => void;
   renameRoom: (id: string, name: string) => void;
@@ -147,6 +149,17 @@ export function DraftProvider({ children }: { children: ReactNode }) {
     [mutate],
   );
 
+  const setOptionCount = useCallback(
+    (n: number) => {
+      mutate((draft) => {
+        // Alternatives on lines are kept, so going 3 -> 1 -> 3 loses nothing.
+        draft.optionCount = Math.min(Math.max(Math.round(n), 1), MAX_OPTIONS);
+        return draft;
+      });
+    },
+    [mutate],
+  );
+
   const addRoom = useCallback(
     (name: string) => {
       const trimmed = name.trim();
@@ -239,6 +252,7 @@ export function DraftProvider({ children }: { children: ReactNode }) {
       setApplyGst,
       setRoomDiscount,
       setQuoteDiscount,
+      setOptionCount,
       addRoom,
       addRooms,
       renameRoom,
@@ -256,6 +270,7 @@ export function DraftProvider({ children }: { children: ReactNode }) {
       setApplyGst,
       setRoomDiscount,
       setQuoteDiscount,
+      setOptionCount,
       addRoom,
       addRooms,
       renameRoom,

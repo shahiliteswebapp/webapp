@@ -8,8 +8,10 @@ with product photos.
 Layout-aware (PyMuPDF): each "ITEM NO" label starts an item; the spec lines
 under it in the same column belong to it; each photo goes to the item printed
 below it in the same column (or the only item on the page). Small badge icons
-are skipped. Photos are written as webp to ../rawdata/catalog-images-web,
-named <g1|gm>_p<page>_<item>_<n>.webp.
+are skipped. Photos are rendered from the page with its text removed (see
+scripts/pdf_photos.py: no stretched slices, no specs printed over them) and
+written as webp to ../rawdata/catalog-images-web, named
+<g1|gm>_p<page>_<item>_r<n>.webp.
 
 Replaces every "Geo Liting catalogue" row in catalog-data.json. Keeps the
 decorative type already on a row with the same code; run
@@ -24,13 +26,13 @@ It is NOT used as a price until the client confirms what it means.
 Run from the repo root:  python scripts/parse-geo-catalogs.py
 """
 
-import io
 import json
 import re
 from pathlib import Path
 
 import pymupdf
-from PIL import Image
+
+from pdf_photos import icon_xrefs, photo_regions, textless
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT.parent / "rawdata"
@@ -121,36 +123,34 @@ def page_items(page):
     return items
 
 
-def assign_images(page, items):
+def score_for(it, bbox):
+    """How well a photo at `bbox` fits an item: same column, then just above it."""
+    x0, y0, x1, y1 = bbox
+    overlap = x0 - 25 <= it["x"] <= x1
+    gap = it["y"] - y1 if it["y"] >= y1 else (0 if y0 <= it["y"] <= y1 else 10_000)
+    return (0 if overlap else 1, gap, abs(it["x"] - x0))
+
+
+def assign_images(page, clean_page, items, icons):
     """Map each product photo on the page to one item."""
     out = {id(it): [] for it in items}
     if not items:
         return out
-    for info in page.get_image_info(xrefs=True):
-        x0, y0, x1, y1 = info["bbox"]
-        if (x1 - x0) < MIN_IMG_PT or (y1 - y0) < MIN_IMG_PT or not info["xref"]:
-            continue
+    regions = photo_regions(page, clean_page, MIN_IMG_PT, MIN_IMG_PT, icons=icons)
+    for info in regions:
         if len(items) == 1:
             out[id(items[0])].append(info)
             continue
-
-        def score(it):
-            overlap = x0 - 5 <= it["x"] <= x1
-            gap = it["y"] - y1 if it["y"] >= y1 else (0 if y0 <= it["y"] <= y1 else 10_000)
-            return (0 if overlap else 1, gap, abs(it["x"] - x0))
-
-        out[id(min(items, key=score))].append(info)
+        out[id(min(items, key=lambda it: score_for(it, info.bbox)))].append(info)
+    # An item left without a photo (layered "Updated" pages) shares the
+    # closest photo printed in its own column, above it.
+    for it in items:
+        if out[id(it)]:
+            continue
+        fits = [r for r in regions if score_for(it, r.bbox)[0] == 0 and score_for(it, r.bbox)[1] < 10_000]
+        if fits:
+            out[id(it)].append(min(fits, key=lambda r: score_for(it, r.bbox)))
     return out
-
-
-def save_image(doc, xref, name):
-    pix = pymupdf.Pixmap(doc, xref)
-    if pix.n - pix.alpha >= 4:  # CMYK
-        pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
-    im = Image.open(io.BytesIO(pix.tobytes("png")))
-    im = im.convert("RGBA") if im.mode in ("RGBA", "LA", "P") else im.convert("RGB")
-    im.thumbnail((1200, 1200))
-    im.save(OUT_IMG / name, "WEBP", quality=80, method=6)
 
 
 def split_sku(sku: str, loose):
@@ -179,9 +179,10 @@ def main():
     stats = {"items": 0, "with_images": 0, "images": 0}
     for prefix, pdf in PDFS:
         doc = pymupdf.open(pdf)
+        clean, icons = textless(doc), icon_xrefs(doc)
         for pno, page in enumerate(doc, start=1):
             items = page_items(page)
-            imgs = assign_images(page, items)
+            imgs = assign_images(page, clean[pno - 1], items, icons)
             for it in items:
                 f = it["fields"]
                 sku, list_number = split_sku(f.get("SKU"), it["loose"])
@@ -191,9 +192,9 @@ def main():
                     sysid, n = f"{base_id}-{n}", n + 1
                 seen_ids.add(sysid)
                 names = []
-                for k, info in enumerate(imgs[id(it)], start=1):
-                    name = f"{prefix}_p{pno:03d}_{sysid[4:]}_{k}.webp"
-                    save_image(doc, info["xref"], name)
+                for k, region in enumerate(imgs[id(it)], start=1):
+                    name = f"{prefix}_p{pno:03d}_{sysid[4:]}_r{k}.webp"
+                    region.save(OUT_IMG / name)
                     names.append(name)
                 dtype = old_type.get(norm_code(it["code"]), "Hanging light")
                 lamp = f.get("LAMP")

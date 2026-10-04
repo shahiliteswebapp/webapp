@@ -9,7 +9,7 @@ import {
 } from "@react-pdf/renderer";
 import { COMPANY, QUOTE, disclaimer } from "@/lib/config";
 import { addDays, fmtDate, fmtDateTime } from "@/lib/format";
-import type { ComputedQuote, ComputedRoom } from "@/lib/quote";
+import type { ComputedLine, ComputedQuote, ComputedRoom } from "@/lib/quote";
 import { registerPdfFonts } from "./fonts";
 
 const inr = new Intl.NumberFormat("en-IN", {
@@ -23,6 +23,8 @@ const GOLD_LINE = "#d9c9a3";
 const INK = "#141414";
 const MUTED = "#6b6b6b";
 const HAIRLINE = "#e2ddd0";
+// A4 width minus the page's horizontal padding.
+const CONTENT_W = 595.28 - 2 * 46;
 
 // @react-pdf/textkit drops the letter after fi/ffi/fl ligatures ("Office" ->
 // "Ofce"). Disabling the ligature features fixes it. Not an inherited style
@@ -129,7 +131,7 @@ const s = StyleSheet.create({
     lineHeight: 1.15,
     ...NO_LIGA,
   },
-  roomIndex: { fontSize: 7.5, letterSpacing: 2, color: GOLD, marginBottom: 3 },
+  roomIndex: { fontSize: 7.5, letterSpacing: 2, color: GOLD, marginBottom: 3, ...NO_LIGA },
   thumb: {
     marginTop: 12,
     marginBottom: 14,
@@ -156,14 +158,50 @@ const s = StyleSheet.create({
     borderBottomColor: HAIRLINE,
     paddingVertical: 5,
   },
-  cPhoto: { width: 44, paddingRight: 8 },
-  photo: {
-    width: 36,
-    height: 36,
-    objectFit: "contain",
+  roomBlueprint: {
+    width: 150,
     borderWidth: 1,
     borderColor: HAIRLINE,
   },
+  photoBox: {
+    borderWidth: 1,
+    borderColor: HAIRLINE,
+    backgroundColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lightRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: HAIRLINE,
+    paddingVertical: 10,
+  },
+  lightIndex: { fontSize: 6.5, letterSpacing: 1.5, color: GOLD, marginBottom: 2, ...NO_LIGA },
+  lightName: {
+    fontFamily: "Cormorant Garamond",
+    fontSize: 14,
+    color: "#0b0b0b",
+    lineHeight: 1.15,
+    marginBottom: 3,
+    ...NO_LIGA,
+  },
+  lightMeta: { fontSize: 8, color: MUTED, ...NO_LIGA },
+  lightAmt: { width: 90, textAlign: "right", fontSize: 10, ...NO_LIGA },
+  optRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: HAIRLINE,
+    paddingVertical: 10,
+  },
+  optLabel: { fontSize: 6.5, letterSpacing: 1.5, color: MUTED, marginBottom: 4, ...NO_LIGA },
+  optName: { fontSize: 8.5, color: INK, marginTop: 5, marginBottom: 1, ...NO_LIGA },
+  optNote: { fontSize: 7, color: GOLD, marginBottom: 1, ...NO_LIGA },
+  optAmt: { fontSize: 10, color: INK, marginTop: 3, ...NO_LIGA },
+  optEmpty: { backgroundColor: "#faf8f3" },
+  optTotals: {
+    marginTop: 12,
+  },
+  totalsCell: { width: 110, textAlign: "right" },
   cDesc: { flexGrow: 1, flexShrink: 1, paddingRight: 8 },
   cQty: { width: 46, textAlign: "right" },
   cUnit: { width: 34, textAlign: "right", color: MUTED },
@@ -300,85 +338,178 @@ function SlimHead({ number }: { number: string }) {
   );
 }
 
-function LineTable({
-  room,
-  photos,
-}: {
-  room: ComputedRoom;
-  photos: Record<string, string>;
-}) {
-  // The photo / discount columns only appear when some line needs them.
-  const withPhotos = room.systems.some((l) => l.image && photos[l.image]);
-  const withDisc = room.systems.some((l) => l.discount > 0);
+/* ------------------------------ room lights ------------------------------ */
+
+const OPT_GAP = 10;
+
+/** Lights in a room across every option, in entry order. */
+function lightPositions(rooms: ComputedRoom[]): { lineId: string; cells: (ComputedLine | undefined)[] }[] {
+  const order: string[] = [];
+  for (const r of rooms) for (const l of r.lines) if (!order.includes(l.lineId)) order.push(l.lineId);
+  return order.map((lineId) => ({
+    lineId,
+    cells: rooms.map((r) => r.lines.find((l) => l.lineId === lineId)),
+  }));
+}
+
+function Photo({ src, size }: { src?: string; size: number }) {
   return (
-    <View>
-      <View style={s.tHead}>
-        {withPhotos && <Text style={[s.tHeadCell, s.cPhoto]}> </Text>}
-        <Text style={[s.tHeadCell, s.cDesc]}>Item</Text>
-        <Text style={[s.tHeadCell, s.cQty]}>Qty</Text>
-        <Text style={[s.tHeadCell, s.cUnit]}>Unit</Text>
-        <Text style={[s.tHeadCell, s.cRate]}>Rate</Text>
-        {withDisc && <Text style={[s.tHeadCell, s.cDisc]}>Discount</Text>}
-        <Text style={[s.tHeadCell, s.cAmt]}>Amount</Text>
-      </View>
+    <View style={[s.photoBox, { width: size, height: size }]}>
+      {src ? <Image src={src} style={{ width: size - 2, height: size - 2, objectFit: "contain" }} /> : null}
+    </View>
+  );
+}
 
-      {room.systems.map((l) => (
-        <View
-          style={[s.tRow, withPhotos ? { alignItems: "center" } : {}]}
-          key={`sys-${l.key}`}
-          wrap={false}
-        >
-          {withPhotos && (
-            <View style={s.cPhoto}>
-              {l.image && photos[l.image] ? (
-                <Image src={photos[l.image]} style={s.photo} />
-              ) : null}
+/** One option: a big photo per light, beside its name, quantity and amount. */
+function SingleOptionLights({ room, photos }: { room: ComputedRoom; photos: Record<string, string> }) {
+  return (
+    <View style={{ marginTop: 4 }}>
+      {room.lines.map((l, i) => (
+        <View key={l.lineId} style={s.lightRow} wrap={false}>
+          <Photo src={l.image ? photos[l.image] : undefined} size={104} />
+          <View style={{ flexGrow: 1, flexShrink: 1, paddingLeft: 14 }}>
+            <Text style={s.lightIndex}>LIGHT {i + 1}</Text>
+            <Text style={s.lightName}>{l.name}</Text>
+            <Text style={s.lightMeta}>
+              {l.qty} {l.unitLabel} × {rs(l.unitCost)}
+              {l.discount > 0 ? `  ·  Discount ${l.discountLabel} (−${rs(l.discount)})` : ""}
+            </Text>
+          </View>
+          <Text style={s.lightAmt}>{rs(l.total)}</Text>
+        </View>
+      ))}
+      {room.lines.length === 0 && (
+        <Text style={{ color: MUTED, paddingVertical: 8 }}>No lighting specified.</Text>
+      )}
+    </View>
+  );
+}
+
+/** Several options: each light gets a row with one column per option. */
+function MultiOptionLights({ rooms, photos }: { rooms: ComputedRoom[]; photos: Record<string, string> }) {
+  const n = rooms.length;
+  const colW = (CONTENT_W - OPT_GAP * (n - 1)) / n;
+  const photoSize = Math.min(150, colW - 4);
+  const positions = lightPositions(rooms);
+  return (
+    <View style={{ marginTop: 4 }}>
+      {positions.map((p, i) => {
+        const any = p.cells.find(Boolean)!;
+        return (
+          <View key={p.lineId} style={s.optRow} wrap={false}>
+            <Text style={s.lightIndex}>
+              LIGHT {i + 1}  ·  QTY {any.qty} {any.unitLabel.toUpperCase()}
+            </Text>
+            <View style={{ flexDirection: "row", marginTop: 6 }}>
+              {p.cells.map((c, o) => (
+                <View
+                  key={o}
+                  style={{ width: colW, marginLeft: o === 0 ? 0 : OPT_GAP }}
+                >
+                  <Text style={s.optLabel}>OPTION {o + 1}</Text>
+                  {c ? (
+                    <>
+                      <Photo src={c.image ? photos[c.image] : undefined} size={photoSize} />
+                      <Text style={s.optName}>{c.name}</Text>
+                      {c.inherited && <Text style={s.optNote}>Same as Option 1</Text>}
+                      <Text style={s.lightMeta}>
+                        {c.qty} {c.unitLabel} × {rs(c.unitCost)}
+                      </Text>
+                      {c.discount > 0 && (
+                        <Text style={s.lightMeta}>
+                          Discount {c.discountLabel} (−{rs(c.discount)})
+                        </Text>
+                      )}
+                      <Text style={s.optAmt}>{rs(c.total)}</Text>
+                    </>
+                  ) : (
+                    <View style={[s.photoBox, s.optEmpty, { width: photoSize, height: photoSize }]}>
+                      <Text style={{ color: MUTED, fontSize: 8 }}>Not included</Text>
+                    </View>
+                  )}
+                </View>
+              ))}
             </View>
-          )}
-          <Text style={s.cDesc}>{l.name}</Text>
-          <Text style={s.cQty}>{l.qty}</Text>
-          <Text style={s.cUnit}>{l.unitLabel}</Text>
-          <Text style={s.cRate}>{rs(l.unitCost)}</Text>
-          {withDisc && (
-            <Text style={s.cDisc}>{l.discount > 0 ? `${l.discountLabel}` : ""}</Text>
-          )}
-          <Text style={s.cAmt}>{rs(l.total)}</Text>
+          </View>
+        );
+      })}
+      {positions.length === 0 && (
+        <Text style={{ color: MUTED, paddingVertical: 8 }}>No lighting specified.</Text>
+      )}
+    </View>
+  );
+}
+
+/** Connectors / drivers, one amount column per option. */
+function Accessories({ rooms }: { rooms: ComputedRoom[] }) {
+  const names = new Map<string, string>();
+  for (const r of rooms) for (const a of r.accessories) names.set(a.accessoryId, a.name);
+  if (names.size === 0) return null;
+  const multi = rooms.length > 1;
+  return (
+    <View style={{ marginTop: 12 }} wrap={false}>
+      <View style={s.tHead}>
+        <Text style={[s.tHeadCell, s.cDesc]}>Connectors / drivers</Text>
+        {rooms.map((_, o) => (
+          <Text key={o} style={[s.tHeadCell, s.cAmt]}>
+            {multi ? `Option ${o + 1}` : "Amount"}
+          </Text>
+        ))}
+      </View>
+      {[...names].map(([id, name]) => (
+        <View style={s.tRow} key={id}>
+          <Text style={s.cDesc}>{name}</Text>
+          {rooms.map((r, o) => {
+            const a = r.accessories.find((x) => x.accessoryId === id);
+            return (
+              <Text key={o} style={s.cAmt}>
+                {a ? `${a.qty} × ${rs(a.unitCost)} = ${rs(a.total)}` : "-"}
+              </Text>
+            );
+          })}
         </View>
       ))}
+    </View>
+  );
+}
 
-      {room.accessories.map((a) => (
-        <View style={s.tRow} key={`acc-${a.accessoryId}`} wrap={false}>
-          {withPhotos && <View style={s.cPhoto} />}
-          <Text style={s.cDesc}>
-            {a.name}
-            <Text style={{ color: MUTED }}> (connector / driver)</Text>
-          </Text>
-          <Text style={s.cQty}>{a.qty}</Text>
-          <Text style={s.cUnit}>nos</Text>
-          <Text style={s.cRate}>{rs(a.unitCost)}</Text>
-          {withDisc && <Text style={s.cDisc} />}
-          <Text style={s.cAmt}>{rs(a.total)}</Text>
+/** Room discount + subtotal, per option. */
+function RoomTotals({ rooms }: { rooms: ComputedRoom[] }) {
+  const multi = rooms.length > 1;
+  const first = rooms[0];
+  if (!multi) {
+    return (
+      <View wrap={false}>
+        {first.discount > 0 && (
+          <View style={s.discLine}>
+            <Text style={{ marginRight: 18 }}>
+              Total {rs(first.beforeDiscount)} · Room discount{pctNote(first.discountLabel)}
+            </Text>
+            <Text>−{rs(first.discount)}</Text>
+          </View>
+        )}
+        <View style={s.subRow}>
+          <Text style={s.subLabel}>Room subtotal</Text>
+          <Text style={s.subValue}>{rs(first.subtotal)}</Text>
         </View>
-      ))}
-
-      {room.systems.length === 0 && room.accessories.length === 0 && (
-        <View style={s.tRow}>
-          <Text style={[s.cDesc, { color: MUTED }]}>No lighting specified.</Text>
-        </View>
-      )}
-
-      {room.discount > 0 && (
-        <View style={s.discLine}>
-          <Text style={{ marginRight: 18 }}>
-            Total {rs(room.beforeDiscount)} · Room discount{pctNote(room.discountLabel)}
-          </Text>
-          <Text>−{rs(room.discount)}</Text>
-        </View>
-      )}
-
-      <View style={s.subRow}>
-        <Text style={s.subLabel}>Room subtotal</Text>
-        <Text style={s.subValue}>{rs(room.subtotal)}</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={s.optTotals} wrap={false}>
+      <Text style={s.subLabel}>Room subtotal</Text>
+      <View style={{ flexDirection: "row", marginTop: 6 }}>
+        {rooms.map((r, o) => (
+          <View key={o} style={{ flexGrow: 1, flexBasis: 0 }}>
+            <Text style={s.optLabel}>OPTION {o + 1}</Text>
+            {r.discount > 0 && (
+              <Text style={s.lightMeta}>
+                Room discount{pctNote(r.discountLabel)} −{rs(r.discount)}
+              </Text>
+            )}
+            <Text style={s.subValue}>{rs(r.subtotal)}</Text>
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -388,7 +519,8 @@ interface RenderArgs {
   number: string;
   createdAtISO: string;
   employeeName: string;
-  quote: ComputedQuote;
+  /** one priced quote per option (a single entry when there are no options) */
+  options: ComputedQuote[];
   blueprintDataUrl?: string;
   blueprintName?: string;
   /** product photo URL -> JPEG data URI (see product-images.ts) */
@@ -399,14 +531,16 @@ function QuotationDoc({
   number,
   createdAtISO,
   employeeName,
-  quote,
+  options,
   blueprintDataUrl,
   blueprintName,
   photos = {},
 }: RenderArgs) {
+  const quote = options[0];
+  const multi = options.length > 1;
   const validUntil = fmtDate(addDays(createdAtISO, QUOTE.validityDays));
-  const roomsWithLighting = quote.rooms.filter(
-    (r) => r.systems.length > 0,
+  const roomsWithLighting = quote.rooms.filter((_, i) =>
+    options.some((q) => q.rooms[i].lines.length > 0),
   ).length;
 
   return (
@@ -462,8 +596,12 @@ function QuotationDoc({
             </Text>
           </View>
           <View style={s.metaCell}>
-            <Text style={s.metaLabel}>Blueprint</Text>
-            <Text style={s.metaValue}>{blueprintName ?? "Not provided"}</Text>
+            <Text style={s.metaLabel}>{multi ? "Options" : "Blueprint"}</Text>
+            <Text style={s.metaValue}>
+              {multi
+                ? `${options.length} options, priced side by side`
+                : (blueprintName ?? "Not provided")}
+            </Text>
           </View>
         </View>
 
@@ -478,24 +616,36 @@ function QuotationDoc({
         <Footer />
       </Page>
 
-      {/* One page per room */}
-      {quote.rooms.map((room, i) => (
-        <Page size="A4" style={s.page} key={room.roomId}>
-          <Watermark />
-          <SlimHead number={number} />
-          <Text style={s.roomIndex}>
-            Room {i + 1} of {quote.rooms.length}
-          </Text>
-          <Text style={s.roomTitle}>{room.name}</Text>
+      {/* One page (or more) per room */}
+      {quote.rooms.map((room, i) => {
+        const perOption = options.map((q) => q.rooms[i]);
+        return (
+          <Page size="A4" style={s.page} key={room.roomId}>
+            <Watermark />
+            <SlimHead number={number} />
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <View style={{ flexShrink: 1, paddingRight: 12 }}>
+                <Text style={s.roomIndex}>
+                  ROOM {i + 1} OF {quote.rooms.length}
+                </Text>
+                <Text style={s.roomTitle}>{room.name}</Text>
+              </View>
+              {blueprintDataUrl ? (
+                <Image src={blueprintDataUrl} style={[s.roomBlueprint]} />
+              ) : null}
+            </View>
 
-          {blueprintDataUrl ? (
-            <Image src={blueprintDataUrl} style={[s.thumb, { width: 240 }]} />
-          ) : null}
-
-          <LineTable room={room} photos={photos} />
-          <Footer />
-        </Page>
-      ))}
+            {multi ? (
+              <MultiOptionLights rooms={perOption} photos={photos} />
+            ) : (
+              <SingleOptionLights room={room} photos={photos} />
+            )}
+            <Accessories rooms={perOption} />
+            <RoomTotals rooms={perOption} />
+            <Footer />
+          </Page>
+        );
+      })}
 
       {/* Totals */}
       <Page size="A4" style={s.page}>
@@ -507,54 +657,71 @@ function QuotationDoc({
         <View style={{ marginTop: 14 }}>
           <View style={s.tHead}>
             <Text style={[s.tHeadCell, s.cDesc]}>Room</Text>
-            <Text style={[s.tHeadCell, s.cAmt]}>Subtotal</Text>
+            {options.map((_, o) => (
+              <Text key={o} style={[s.tHeadCell, s.cAmt]}>
+                {multi ? `Option ${o + 1}` : "Subtotal"}
+              </Text>
+            ))}
           </View>
           {quote.rooms.map((room, i) => (
             <View style={s.tRow} key={room.roomId}>
               <Text style={s.cDesc}>
                 {i + 1}. {room.name}
               </Text>
-              <Text style={s.cAmt}>{rs(room.subtotal)}</Text>
+              {options.map((q, o) => (
+                <Text key={o} style={s.cAmt}>
+                  {rs(q.rooms[i].subtotal)}
+                </Text>
+              ))}
             </View>
           ))}
         </View>
 
-        <View style={s.totalsBox}>
-          {quote.discount > 0 && (
+        <View style={[s.totalsBox, multi ? { width: "100%" } : {}]}>
+          {multi && (
+            <View style={s.totalsLine}>
+              <Text style={{ color: MUTED, flexGrow: 1 }} />
+              {options.map((_, o) => (
+                <Text key={o} style={[s.totalsCell, s.tHeadCell]}>
+                  Option {o + 1}
+                </Text>
+              ))}
+            </View>
+          )}
+          {options.some((q) => q.discount > 0) && (
             <>
-              <View style={s.totalsLine}>
-                <Text style={{ color: MUTED }}>Rooms total</Text>
-                <Text>{rs(quote.roomsTotal)}</Text>
-              </View>
-              <View style={s.totalsLine}>
-                <Text style={{ color: MUTED }}>Discount{pctNote(quote.discountLabel)}</Text>
-                <Text>−{rs(quote.discount)}</Text>
-              </View>
+              <TotalsRow label="Rooms total" values={options.map((q) => rs(q.roomsTotal))} />
+              <TotalsRow
+                label={`Discount${pctNote(quote.discountLabel)}`}
+                values={options.map((q) => `−${rs(q.discount)}`)}
+              />
             </>
           )}
-          <View style={s.totalsLine}>
-            <Text style={{ color: MUTED }}>Subtotal</Text>
-            <Text>{rs(quote.subtotal)}</Text>
-          </View>
+          <TotalsRow label="Subtotal" values={options.map((q) => rs(q.subtotal))} />
           {quote.applyGst ? (
-            <View style={s.totalsLine}>
-              <Text style={{ color: MUTED }}>GST @ {quote.gstRatePct}%</Text>
-              <Text>{rs(quote.gstAmount)}</Text>
-            </View>
+            <TotalsRow
+              label={`GST @ ${quote.gstRatePct}%`}
+              values={options.map((q) => rs(q.gstAmount))}
+            />
           ) : (
-            <View style={s.totalsLine}>
-              <Text style={{ color: MUTED }}>GST</Text>
-              <Text style={{ color: MUTED }}>Not included</Text>
-            </View>
+            <TotalsRow label="GST" values={options.map(() => "Not included")} muted />
           )}
           <View style={s.totalsGrand}>
-            <Text style={s.grandLabel}>Grand Total</Text>
-            <Text style={s.grandValue}>{rs(quote.grandTotal)}</Text>
+            <Text style={[s.grandLabel, { flexGrow: 1 }]}>Grand Total</Text>
+            {options.map((q, o) => (
+              <Text key={o} style={[s.grandValue, multi ? s.totalsCell : {}]}>
+                {rs(q.grandTotal)}
+              </Text>
+            ))}
           </View>
-          {quote.totalSavings > 0 && (
+          {options.some((q) => q.totalSavings > 0) && (
             <View style={[s.totalsLine, { marginTop: 4 }]}>
-              <Text style={{ color: GOLD }}>Total discount (before GST)</Text>
-              <Text style={{ color: GOLD }}>{rs(quote.totalSavings)}</Text>
+              <Text style={{ color: GOLD, flexGrow: 1 }}>Total discount (before GST)</Text>
+              {options.map((q, o) => (
+                <Text key={o} style={[{ color: GOLD }, multi ? s.totalsCell : {}]}>
+                  {rs(q.totalSavings)}
+                </Text>
+              ))}
             </View>
           )}
         </View>
@@ -566,6 +733,20 @@ function QuotationDoc({
         <Footer />
       </Page>
     </Document>
+  );
+}
+
+function TotalsRow({ label, values, muted }: { label: string; values: string[]; muted?: boolean }) {
+  const multi = values.length > 1;
+  return (
+    <View style={s.totalsLine}>
+      <Text style={{ color: MUTED, flexGrow: 1 }}>{label}</Text>
+      {values.map((v, o) => (
+        <Text key={o} style={[muted ? { color: MUTED } : {}, multi ? s.totalsCell : {}]}>
+          {v}
+        </Text>
+      ))}
+    </View>
   );
 }
 

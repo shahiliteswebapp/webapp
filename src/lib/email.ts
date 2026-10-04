@@ -49,7 +49,8 @@ async function send(
 export async function sendQuotationEmail(args: {
   number: string;
   pdf: Buffer;
-  grandTotal: number;
+  /** grand total of each option (one entry for a single-option quotation) */
+  optionTotals: number[];
   applyGst?: boolean;
   employeeName: string;
   employeeEmail: string;
@@ -73,7 +74,14 @@ export async function sendQuotationEmail(args: {
     text: [
       `Quotation ${args.number}`,
       `Prepared by: ${args.employeeName}`,
-      `Grand total: ${money(args.grandTotal)} (${args.applyGst === false ? "GST not included" : "incl. GST"})`,
+      ...(args.optionTotals.length > 1
+        ? args.optionTotals.map(
+            (t, i) =>
+              `Option ${i + 1} total: ${money(t)} (${args.applyGst === false ? "GST not included" : "incl. GST"})`,
+          )
+        : [
+            `Grand total: ${money(args.optionTotals[0] ?? 0)} (${args.applyGst === false ? "GST not included" : "incl. GST"})`,
+          ]),
       "",
       "The attached PDF is the only copy of this quotation. Shahi Lites does",
       "not retain a copy of the document or its line items. Please keep it safe.",

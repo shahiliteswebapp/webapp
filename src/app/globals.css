@@ -81,3 +81,20 @@ p, li, dt, dd, td, th {
   outline-offset: 2px;
   border-radius: 6px;
 }
+
+/* Light picker results: a scroll bar that is always there and easy to grab. */
+.picker-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-gold) var(--color-panel);
+}
+.picker-list::-webkit-scrollbar {
+  width: 10px;
+}
+.picker-list::-webkit-scrollbar-track {
+  background: var(--color-panel);
+}
+.picker-list::-webkit-scrollbar-thumb {
+  background: var(--color-gold);
+  border-radius: 999px;
+  border: 2px solid var(--color-panel);
+}

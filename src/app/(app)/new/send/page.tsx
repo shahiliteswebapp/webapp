@@ -8,7 +8,7 @@ import { COMPANY, EMAIL, QUOTE, disclaimer } from "@/lib/config";
 import { useDraft } from "@/lib/draft/context";
 import { downscaleDataUrl } from "@/lib/draft/render";
 import { money } from "@/lib/format";
-import { computeQuote } from "@/lib/quote";
+import { computeOptions, optionLabel } from "@/lib/quote";
 import { cx } from "@/lib/cx";
 import { draftStarted } from "@/lib/types";
 
@@ -32,11 +32,10 @@ export default function SendPage() {
     );
   }
 
-  const quote = computeQuote(draft.rooms, {
-    applyGst: draft.applyGst,
-    discount: draft.discount,
-  });
-  const canSend = quote.grandTotal > 0;
+  const options = computeOptions(draft);
+  const quote = options[0];
+  const multi = options.length > 1;
+  const canSend = options.every((q) => q.grandTotal > 0);
 
   const submit = async (action: Action) => {
     setBusy(action);
@@ -54,6 +53,7 @@ export default function SendPage() {
           blueprintName: draft.blueprint?.name,
           applyGst: quote.applyGst,
           discount: draft.discount,
+          optionCount: options.length,
           action,
         }),
       });
@@ -111,16 +111,24 @@ export default function SendPage() {
               <dt className="text-muted">Rooms</dt>
               <dd className="text-ink">{draft.rooms.length}</dd>
             </div>
-            {quote.totalSavings > 0 && (
+            {multi && (
+              <div className="flex justify-between">
+                <dt className="text-muted">Options</dt>
+                <dd className="text-ink">{options.length}</dd>
+              </div>
+            )}
+            {!multi && quote.totalSavings > 0 && (
               <div className="flex justify-between">
                 <dt className="text-muted">Discounts (lines, rooms, quotation)</dt>
                 <dd className="tabular-nums text-ink">−{money(quote.totalSavings)}</dd>
               </div>
             )}
-            <div className="flex justify-between">
-              <dt className="text-muted">Subtotal</dt>
-              <dd className="tabular-nums text-ink">{money(quote.subtotal)}</dd>
-            </div>
+            {!multi && (
+              <div className="flex justify-between">
+                <dt className="text-muted">Subtotal</dt>
+                <dd className="tabular-nums text-ink">{money(quote.subtotal)}</dd>
+              </div>
+            )}
               <div className="flex items-center justify-between gap-3">
                 <dt>
                   <label className="flex cursor-pointer items-center gap-2 text-muted">
@@ -135,15 +143,22 @@ export default function SendPage() {
                   </label>
                 </dt>
                 <dd className={cx("tabular-nums", quote.applyGst ? "text-ink" : "text-faint")}>
-                  {quote.applyGst ? money(quote.gstAmount) : "Not included"}
+                  {quote.applyGst ? (multi ? "Added to each option" : money(quote.gstAmount)) : "Not included"}
                 </dd>
               </div>
-            <div className="flex justify-between border-t border-hairline pt-2">
-              <dt className="font-display text-xl text-ink-deep">Grand total</dt>
-              <dd className="font-display text-xl tabular-nums text-ink-deep">
-                {money(quote.grandTotal)}
-              </dd>
-            </div>
+            {options.map((q, k) => (
+              <div
+                key={k}
+                className={cx("flex justify-between", k === 0 && "border-t border-hairline pt-2")}
+              >
+                <dt className="font-display text-xl text-ink-deep">
+                  {multi ? `${optionLabel(k)} total` : "Grand total"}
+                </dt>
+                <dd className="font-display text-xl tabular-nums text-ink-deep">
+                  {money(q.grandTotal)}
+                </dd>
+              </div>
+            ))}
           </dl>
         </Card>
 
@@ -170,6 +185,14 @@ export default function SendPage() {
         <p className="rounded-md border border-gold/40 bg-gold-tint px-3 py-2 text-xs text-ink-deep">
           {disclaimer(quote.applyGst)}
         </p>
+
+        {!canSend && (
+          <p className="text-center text-xs text-faint">
+            {multi
+              ? "Every option needs at least one priced light before it can be generated."
+              : "Add a priced light to at least one room first."}
+          </p>
+        )}
 
         {error && (
           <p className="rounded-md border border-rejected/30 bg-rejected/5 px-3 py-2 text-sm text-rejected">

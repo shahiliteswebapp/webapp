@@ -101,17 +101,32 @@ export interface Discount {
   value: number;
 }
 
-export interface RoomLine {
-  id: string;
+/** The product picked for one light, in one quotation option. */
+export interface LineChoice {
+  /** "" in an alternative = this light is left out of that option */
   systemId: string;
-  qty: number;
   /** chosen automation variant (functional systems with interface options) */
   interfaceTag?: string;
   control?: "dimmable" | "tunable";
   /** employee-entered rate, only used when the catalogue has no price */
   unitPrice?: number;
+}
+
+/** The most options (alternative proposals) one quotation can carry. */
+export const MAX_OPTIONS = 3;
+
+/*
+ * One light in a room. Its own LineChoice fields are Option 1; `alts` holds
+ * Options 2 and 3. A missing alt means "same light as Option 1". Quantity and
+ * discount are shared by every option.
+ */
+export interface RoomLine extends LineChoice {
+  id: string;
+  qty: number;
   /** discount on this line (qty x rate) */
   discount?: Discount;
+  /** alts[0] = Option 2, alts[1] = Option 3 */
+  alts?: (LineChoice | null)[];
 }
 
 export interface DraftRoom {
@@ -132,10 +147,34 @@ export interface QuoteDraft {
   applyGst?: boolean;
   /** discount on the whole quotation, after room discounts, before GST */
   discount?: Discount;
+  /** how many options (1 to MAX_OPTIONS) the quotation offers; default 1 */
+  optionCount?: number;
   rooms: DraftRoom[];
 }
 
 /** True once the employee has started (blueprint uploaded, or skipped). */
 export function draftStarted(d: QuoteDraft | null | undefined): d is QuoteDraft {
   return !!d && (!!d.blueprint || !!d.noBlueprint);
+}
+
+/** Number of options a draft offers, clamped to 1..MAX_OPTIONS. */
+export function optionCountOf(d: { optionCount?: number } | null | undefined): number {
+  const n = Math.round(Number(d?.optionCount) || 1);
+  return Math.min(Math.max(n, 1), MAX_OPTIONS);
+}
+
+/**
+ * The product a line uses in option `opt` (0-based). Option 1 is the line
+ * itself; an unset alternative falls back to it.
+ */
+export function choiceFor(line: RoomLine, opt: number): LineChoice & { inherited: boolean } {
+  const own = {
+    systemId: line.systemId,
+    interfaceTag: line.interfaceTag,
+    control: line.control,
+    unitPrice: line.unitPrice,
+  };
+  if (opt <= 0) return { ...own, inherited: false };
+  const alt = line.alts?.[opt - 1];
+  return alt ? { ...alt, inherited: false } : { ...own, inherited: true };
 }

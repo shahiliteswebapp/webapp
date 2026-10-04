@@ -5,6 +5,10 @@ Product photos for the functional (priced) catalogues.
   ../rawdata/Architectural Product list -Dec'25.pdf one photo (or a few) per product family,
                                                     left of an "Ordering Code" price table
 
+Photos are rendered from the page with its text removed (scripts/pdf_photos.py)
+so they keep the proportions and orientation they are printed with; badge
+icons ("DIMMABLE", "TUNABLE") are skipped.
+
 Writes webp files to ../rawdata/catalog-images-web (eco_* / arch_*) and sets
 `images` on the matching functional rows of catalog-data.json. Idempotent.
 Upload with scripts/upload-catalog-images.mjs.
@@ -12,13 +16,13 @@ Upload with scripts/upload-catalog-images.mjs.
 Run from the repo root:  python scripts/parse-functional-images.py
 """
 
-import io
 import json
 import re
 from pathlib import Path
 
 import pymupdf
-from PIL import Image
+
+from pdf_photos import icon_xrefs, photo_regions, textless
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT.parent / "rawdata"
@@ -38,19 +42,17 @@ def norm(code) -> str:
     return re.sub(r"[\s\-]+", "", str(code or "")).upper()
 
 
-def save_image(doc, xref, name, seen):
-    """Save once per xref (the same photo can serve several items)."""
-    if xref in seen:
-        return seen[xref]
-    pix = pymupdf.Pixmap(doc, xref)
-    if pix.n - pix.alpha >= 4:
-        pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
-    im = Image.open(io.BytesIO(pix.tobytes("png")))
-    im = im.convert("RGBA") if im.mode in ("RGBA", "LA", "P") else im.convert("RGB")
-    im.thumbnail((1200, 1200))
-    im.save(OUT_IMG / name, "WEBP", quality=80, method=6)
-    seen[xref] = name
+def save_image(region, name, seen):
+    """Save once per photo (the same photo can serve several items)."""
+    if region.key in seen:
+        return seen[region.key]
+    region.save(OUT_IMG / name)
+    seen[region.key] = name
     return name
+
+
+def regions_of(page, clean_page, icons, keep=None, min_h=25):
+    return photo_regions(page, clean_page, 25, min_h, keep=keep, icons=icons)
 
 
 def lines_of(page):
@@ -68,6 +70,7 @@ def lines_of(page):
 def eco_images():
     """code -> [image names]"""
     doc = pymupdf.open(ECO_PDF)
+    clean, icons = textless(doc), icon_xrefs(doc)
     seen, result = {}, {}
     for pno, page in enumerate(doc, start=1):
         items = []
@@ -77,17 +80,16 @@ def eco_images():
                 items.append({"x": x, "y": y, "code": m.group(1)})
         if not items:
             continue
-        imgs = [i for i in page.get_image_info(xrefs=True) if i["xref"]
-                and (i["bbox"][2] - i["bbox"][0]) > 25 and (i["bbox"][3] - i["bbox"][1]) > 25]
+        imgs = regions_of(page, clean[pno - 1], icons)
         for it in items:
             below = [o["y"] for o in items if abs(o["x"] - it["x"]) < 40 and o["y"] > it["y"]]
             y_end = min(below, default=it["y"] + 110)
             for info in imgs:
-                x0, y0, x1, y1 = info["bbox"]
+                x0, y0, x1, y1 = info.bbox
                 cy = (y0 + y1) / 2
                 # photo is left of the text block, in the same row band
                 if x1 <= it["x"] + 5 and x0 >= it["x"] - 140 and it["y"] - 20 <= cy <= y_end:
-                    name = save_image(doc, info["xref"], f"eco_p{pno:03d}_{info['xref']}.webp", seen)
+                    name = save_image(info, f"eco_p{pno:03d}_r{info.key[0]}.webp", seen)
                     for key in {norm(it["code"]), norm((ECO_BASE_RE.match(it["code"]) or [it["code"]])[0])}:
                         result.setdefault(key, [])
                         if name not in result[key]:
@@ -98,6 +100,7 @@ def eco_images():
 def arch_images():
     """ordering code -> [image names]"""
     doc = pymupdf.open(ARCH_PDF)
+    clean, icons = textless(doc), icon_xrefs(doc)
     seen, result = {}, {}
     for pno, page in enumerate(doc, start=1):
         lines = lines_of(page)
@@ -107,13 +110,15 @@ def arch_images():
         # A family block starts a little above its "Ordering Code" header (the
         # family name and photo sit there) and runs to the next block.
         starts = [h - 45 for h in headers] + [page.rect.height + 1]
-        imgs = [i for i in page.get_image_info(xrefs=True) if i["xref"]
-                and i["bbox"][1] > 45  # skip the TISVA logo in the header
-                and (i["bbox"][2] - i["bbox"][0]) > 25 and (i["bbox"][3] - i["bbox"][1]) > 20]
+        imgs = regions_of(
+            page, clean[pno - 1], icons,
+            keep=lambda i: i["bbox"][1] > 45,  # skip the TISVA logo in the header
+            min_h=20,
+        )
         for k in range(len(headers)):
             top, bottom = starts[k], starts[k + 1]
-            block_imgs = [i for i in imgs if top <= (i["bbox"][1] + i["bbox"][3]) / 2 < bottom]
-            names = [save_image(doc, i["xref"], f"arch_p{pno:03d}_{i['xref']}.webp", seen) for i in block_imgs]
+            block_imgs = [i for i in imgs if top <= (i.bbox[1] + i.bbox[3]) / 2 < bottom]
+            names = [save_image(i, f"arch_p{pno:03d}_r{i.key[0]}.webp", seen) for i in block_imgs]
             if not names:
                 continue
             for x, y, text in lines:

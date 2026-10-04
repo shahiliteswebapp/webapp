@@ -7,7 +7,7 @@ import { readLocalCatalogImage } from "@/lib/catalog-store";
  * data URI. A photo that fails to load is simply left out of the PDF.
  */
 
-const PX = 240; // ~2x the printed thumbnail size
+const PX = 360; // ~2.4x the largest printed photo (150pt)
 const TIMEOUT_MS = 8000;
 const CONCURRENCY = 6;
 
