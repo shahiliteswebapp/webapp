@@ -266,6 +266,18 @@ export async function updateQuotation(
   return mapRecord(row);
 }
 
+/** Permanently remove quotations; their events go with them (on delete cascade). */
+export async function deleteQuotations(numbers: string[]): Promise<number> {
+  if (numbers.length === 0) return 0;
+  const { data, error } = await getSupabase()
+    .from("quotations")
+    .delete()
+    .in("number", numbers)
+    .select("id");
+  if (error) throw dbError(error);
+  return (data ?? []).length;
+}
+
 export async function setStatus(
   id: string,
   to: Exclude<QuotationStatus, "submitted_for_review" | "downloaded">,

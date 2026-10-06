@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { computeOptions } from "@/lib/quote";
 import { createQuotation, getQuotation, updateQuotation } from "@/lib/store";
-import { saveQuoteFiles } from "@/lib/quote-files";
+import { saveQuoteFiles, type SavedDraft } from "@/lib/quote-files";
+import { encodeDraftToken } from "@/lib/pdf/draft-token";
 import { defaultValidUntil, isValidValidUntil } from "@/lib/format";
 import { sendQuotationEmail } from "@/lib/email";
 import { renderQuotationPdf } from "@/lib/pdf/quotation-pdf";
@@ -146,6 +147,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Could not save the quotation." }, { status: 500 });
   }
 
+  const contents: Omit<SavedDraft, "blueprint" | "savedAt"> = {
+    rooms,
+    applyGst: quote.applyGst,
+    discount,
+    optionCount: options.length,
+    client,
+    validUntil,
+    noBlueprint: !body.blueprintSaveDataUrl,
+  };
+
   let pdf: Buffer;
   try {
     const photos = await productPhotosForPdf(
@@ -163,6 +174,8 @@ export async function POST(req: Request) {
       options,
       blueprintDataUrl: body.blueprintPreviewDataUrl,
       blueprintName: body.blueprintName,
+      // The PDF carries its own editable contents, so it can be re-uploaded.
+      embedded: encodeDraftToken({ number: record.number, draft: contents }),
     });
   } catch (err) {
     console.error("PDF render failed", err);
@@ -180,13 +193,7 @@ export async function POST(req: Request) {
       pdf,
       blueprintDataUrl: body.blueprintSaveDataUrl,
       draft: {
-        rooms,
-        applyGst: quote.applyGst,
-        discount,
-        optionCount: options.length,
-        client,
-        validUntil,
-        noBlueprint: !body.blueprintSaveDataUrl,
+        ...contents,
         blueprint:
           body.blueprintSaveDataUrl && bp
             ? {

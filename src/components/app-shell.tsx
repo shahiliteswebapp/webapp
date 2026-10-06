@@ -6,6 +6,7 @@ import { cx } from "@/lib/cx";
 import { Wordmark } from "./brand";
 import { PlusWidget } from "./plus-widget";
 import { HeaderMenu } from "./header-menu";
+import { InstallApp } from "./install-app";
 
 export function AppShell({
   session,
@@ -57,6 +58,7 @@ export function AppShell({
             />
           </div>
         </div>
+        <InstallApp />
       </header>
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-5 pt-6 pb-10 sm:pb-28 lg:pb-10">

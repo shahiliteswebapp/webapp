@@ -557,6 +557,8 @@ interface RenderArgs {
   validUntil?: string;
   /** 1 for the first version; shown from 2 on */
   revision?: number;
+  /** encrypted editable contents, stored in the PDF's Keywords (draft-token.ts) */
+  embedded?: string;
 }
 
 function QuotationDoc({
@@ -570,6 +572,7 @@ function QuotationDoc({
   client,
   validUntil: validUntilYmd,
   revision = 1,
+  embedded,
 }: RenderArgs) {
   const quote = options[0];
   const multi = options.length > 1;
@@ -584,6 +587,7 @@ function QuotationDoc({
     <Document
       title={`Shahi Lites Quotation ${number}`}
       author={COMPANY.legalName}
+      keywords={embedded}
     >
       {/* Cover */}
       <Page size="A4" style={s.page}>

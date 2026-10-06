@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { signOutAction } from "@/lib/actions/auth";
 import { cx } from "@/lib/cx";
 import { MENU_ITEMS, SUPERADMIN_MENU_ITEMS } from "./plus-widget";
+import { SHOW_INSTALL_EVENT } from "./install-app";
 
 /*
  * Phones only: the menu sits top right in the header (where Sign out is on
@@ -91,6 +92,19 @@ export function HeaderMenu({
                 </Link>
               </li>
             ))}
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  window.dispatchEvent(new Event(SHOW_INSTALL_EVENT));
+                }}
+                className="flex w-full flex-col px-4 py-2.5 text-left hover:bg-gold-tint"
+              >
+                <span className="text-sm font-medium text-ink">Add to home screen</span>
+                <span className="text-xs text-muted">Open it like an app</span>
+              </button>
+            </li>
             <li>
               <form action={signOutAction}>
                 <button

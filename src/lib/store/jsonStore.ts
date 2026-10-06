@@ -202,6 +202,19 @@ export async function updateQuotation(
   });
 }
 
+/** Permanently remove quotations and their history events. Returns how many went. */
+export async function deleteQuotations(numbers: string[]): Promise<number> {
+  return serialize(async () => {
+    const db = await read();
+    const drop = new Set(numbers);
+    const ids = new Set(db.quotations.filter((q) => drop.has(q.number)).map((q) => q.id));
+    db.quotations = db.quotations.filter((q) => !ids.has(q.id));
+    db.events = db.events.filter((e) => !ids.has(e.quotationId));
+    await write(db);
+    return ids.size;
+  });
+}
+
 export async function setStatus(
   id: string,
   to: Exclude<QuotationStatus, "submitted_for_review" | "downloaded">,

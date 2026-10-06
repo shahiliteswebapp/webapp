@@ -212,6 +212,11 @@ export function applyCatalogChanges(items: LightingSystem[], removed: string[] =
 
 const ACCESSORY_BY_ID = new Map(ACCESSORIES.map((a) => [a.id, a]));
 
+/** Every known system, removed ones included (for matching old quotations). */
+export function allSystems(): LightingSystem[] {
+  return [...SYSTEM_BY_ID.values()];
+}
+
 export function getSystem(id: string): LightingSystem | undefined {
   return SYSTEM_BY_ID.get(id);
 }

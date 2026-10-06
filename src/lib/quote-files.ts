@@ -173,6 +173,21 @@ export async function readQuoteDraft(
   return { draft, blueprintDataUrl };
 }
 
+/** Permanently delete every saved file of a quotation (no backup). */
+export async function deleteQuoteFiles(number: string): Promise<void> {
+  const dir = checkNumber(number);
+  if (inSupabase()) {
+    const { data } = await getSupabase().storage.from(BUCKET).list(dir, { limit: 100 });
+    const keys = (data ?? []).map((f) => `${dir}/${f.name}`);
+    if (keys.length) {
+      const { error } = await getSupabase().storage.from(BUCKET).remove(keys);
+      if (error) throw new Error(`Supabase storage delete ${dir}: ${error.message}`);
+    }
+    return;
+  }
+  await fs.rm(path.join(ROOT, dir), { recursive: true, force: true });
+}
+
 /** Numbers that have a saved, editable copy (for the history list). */
 export async function savedQuoteNumbers(): Promise<Set<string>> {
   if (inSupabase()) {

@@ -163,3 +163,43 @@ function drawScaled(
   ctx.drawImage(source, 0, 0, width, height);
   return { canvas, width, height };
 }
+
+/** What a quotation PDF holds, for re-opening it (see /api/quotations/import). */
+export interface PdfText {
+  keywords: string | null;
+  /** every page's text pieces, with x and distance from the page top */
+  pages: { s: string; x: number; y: number }[][];
+}
+
+export async function readPdfText(file: File): Promise<PdfText> {
+  const isPdf =
+    file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  if (!isPdf) throw new BlueprintError("Choose a quotation PDF.");
+  const pdfjs = await getPdfjs();
+  const loadingTask = pdfjs.getDocument({ data: await file.arrayBuffer() });
+  let doc;
+  try {
+    doc = await loadingTask.promise;
+  } catch {
+    throw new BlueprintError("Could not read that PDF. It may be corrupt or password-protected.");
+  }
+  try {
+    const meta = await doc.getMetadata().catch(() => null);
+    const info = (meta?.info ?? {}) as { Keywords?: unknown };
+    const pages: PdfText["pages"] = [];
+    for (let n = 1; n <= Math.min(doc.numPages, 200); n++) {
+      const page = await doc.getPage(n);
+      const { height } = page.getViewport({ scale: 1 });
+      const content = await page.getTextContent();
+      const items: PdfText["pages"][number] = [];
+      for (const it of content.items) {
+        if (!("str" in it) || !it.str.trim()) continue;
+        items.push({ s: it.str, x: it.transform[4], y: height - it.transform[5] });
+      }
+      pages.push(items);
+    }
+    return { keywords: typeof info.Keywords === "string" ? info.Keywords : null, pages };
+  } finally {
+    void loadingTask.destroy();
+  }
+}

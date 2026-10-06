@@ -21,6 +21,7 @@ export const rejectionCounts = impl.rejectionCounts;
 export const createQuotation = impl.createQuotation;
 export const updateQuotation = impl.updateQuotation;
 export const setStatus = impl.setStatus;
+export const deleteQuotations = impl.deleteQuotations;
 
 export const isAllowed = impl.isAllowed;
 export const touchSignIn = impl.touchSignIn;

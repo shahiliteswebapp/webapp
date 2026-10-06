@@ -8,6 +8,7 @@ import { UPLOAD } from "@/lib/config";
 import { useDraft } from "@/lib/draft/context";
 import { BlueprintError, renderBlueprint } from "@/lib/draft/render";
 import { cx } from "@/lib/cx";
+import { PdfImport } from "@/components/pdf-import";
 import { draftStarted } from "@/lib/types";
 
 export default function BlueprintUploadPage() {
@@ -18,6 +19,8 @@ export default function BlueprintUploadPage() {
   const [error, setError] = useState<string | null>(null);
   const [warn, setWarn] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  // Notes from opening an old PDF (products it could not match, etc.).
+  const [importNotes, setImportNotes] = useState<string[]>([]);
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -138,6 +141,16 @@ export default function BlueprintUploadPage() {
               {error}
             </p>
           )}
+          <div className="border-t border-hairline pt-3">
+            <PdfImport onWarnings={setImportNotes} />
+          </div>
+          {importNotes.length > 0 && (
+            <ul className="space-y-1 rounded-md border border-gold/40 bg-gold-tint px-3 py-2 text-xs text-ink-deep">
+              {importNotes.map((n) => (
+                <li key={n}>{n}</li>
+              ))}
+            </ul>
+          )}
           <p className="text-xs text-faint">
             Changing the blueprint keeps every room and light. The draft lives
             in this browser until you generate the PDF, which saves it.
@@ -203,6 +216,13 @@ export default function BlueprintUploadPage() {
               {error}
             </p>
           )}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-card)] border border-hairline p-4">
+            <p className="text-sm text-muted">
+              Have an old quotation PDF? Open it to start from its rooms, lights and
+              client details. You can add, replace or remove the blueprint next.
+            </p>
+            <PdfImport onWarnings={setImportNotes} />
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-card)] border border-hairline p-4">
             <p className="text-sm text-muted">
               No blueprint? You can still build the quotation room by room.
