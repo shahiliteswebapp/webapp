@@ -21,7 +21,7 @@ function SentInner() {
   const saved = params.get("saved");
   const emailError = params.get("emailError");
   const applyGst = params.get("gst") !== "0";
-  const rev = params.get("rev");
+  const from = params.get("from");
   const valid = params.get("valid");
   const forReview = status === "submitted_for_review";
 
@@ -68,7 +68,7 @@ function SentInner() {
           </svg>
         </div>
         <p className="eyebrow mt-4">
-          {rev ? `Edited, revision ${rev}` : forReview ? "Submitted for review" : "Quotation generated"}
+          {from ? "New quotation number" : forReview ? "Submitted for review" : "Quotation generated"}
         </p>
         <h1 className="mt-1 font-display text-4xl text-ink-deep">{number}</h1>
       </div>

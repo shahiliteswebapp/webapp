@@ -16,7 +16,7 @@ function QuoteActions({ q, saved }: { q: QuotationRecord; saved: boolean }) {
     return (
       <Link
         href={`/new/edit/${n}`}
-        title="Made before quotations were saved. Rebuild it under the same number."
+        title="Made before quotations were saved. Rebuild it as a new quotation."
         className="inline-flex h-8 items-center rounded-full border border-gold px-3 text-xs font-medium text-gold-deep hover:bg-gold-tint"
       >
         Rebuild
@@ -233,14 +233,14 @@ export function HistoryList({
               <div className="min-w-0 flex-1">
                 <p className="font-medium text-ink">
                   {q.number}
-                  {(q.revision ?? 1) > 1 && (
-                    <span className="ml-1.5 text-xs font-normal text-faint">rev {q.revision}</span>
+                  {isSuperadmin && q.editedFrom && (
+                    <span className="ml-1.5 text-xs font-normal text-faint">from {q.editedFrom}</span>
                   )}
                 </p>
                 <p className="truncate text-xs text-muted">
                   {[q.clientName, isSuperadmin ? q.employeeName : null].filter(Boolean).join(" · ") || "-"}
                 </p>
-                <p className="text-xs text-faint">{fmtDateTime(q.updatedAt ?? q.createdAt)}</p>
+                <p className="text-xs text-faint">{fmtDateTime(q.createdAt)}</p>
               </div>
               {isSuperadmin && (
                 <span className="shrink-0 text-right text-sm tabular-nums text-ink">{money(q.totalAmount)}</span>
@@ -284,16 +284,13 @@ export function HistoryList({
                 )}
                 <td className="px-4 py-2.5 font-medium text-ink">
                   {q.number}
-                  {(q.revision ?? 1) > 1 && (
-                    <span className="block text-xs font-normal text-faint">rev {q.revision}</span>
+                  {isSuperadmin && q.editedFrom && (
+                    <span className="block text-xs font-normal text-faint">edited from {q.editedFrom}</span>
                   )}
                 </td>
                 <td className="px-4 py-2.5 text-muted">{q.clientName || "-"}</td>
                 <td className="px-4 py-2.5 text-muted">
                   {fmtDateTime(q.createdAt)}
-                  {q.updatedAt && (
-                    <span className="block text-xs text-faint">edited {fmtDateTime(q.updatedAt)}</span>
-                  )}
                 </td>
                 {isSuperadmin && <td className="px-4 py-2.5 text-muted">{q.employeeName}</td>}
                 <td className="px-4 py-2.5">

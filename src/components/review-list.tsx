@@ -50,6 +50,7 @@ function ReviewCard({ q }: { q: QuotationRecord }) {
           Edit
         </a>
         {q.clientName && <span className="text-muted">For {q.clientName}</span>}
+        {q.editedFrom && <span className="text-faint">Edited from {q.editedFrom}</span>}
       </div>
 
       <textarea

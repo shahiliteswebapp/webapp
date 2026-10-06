@@ -58,6 +58,8 @@ create index if not exists app_users_status_idx      on public.app_users (status
 alter table public.quotations add column if not exists client_name text;
 alter table public.quotations add column if not exists revision    int not null default 1;
 alter table public.quotations add column if not exists updated_at  timestamptz;
+-- An edit is saved as a NEW quotation with its own number; this links it to the one it came from.
+alter table public.quotations add column if not exists edited_from text;
 
 -- Also allow the new 'downloaded' status on a table created before this change.
 alter table public.quotations drop constraint if exists quotations_status_check;
@@ -73,15 +75,18 @@ alter table public.app_users          enable row level security;
 
 -- atomic quotation creation: allocate SL-YYYY-NNNN + insert + log an event
 
--- The older 4-argument version is replaced by the one below.
+-- Older versions are replaced by the one below.
+drop function if exists public.create_quotation(text, text, numeric);
 drop function if exists public.create_quotation(text, text, numeric, text);
+drop function if exists public.create_quotation(text, text, numeric, text, text);
 
 create or replace function public.create_quotation(
   p_employee_name   text,
   p_employee_email  text,
   p_total_amount    numeric,
   p_status          text default 'submitted_for_review',
-  p_client_name     text default null
+  p_client_name     text default null,
+  p_edited_from     text default null
 ) returns public.quotations
 language plpgsql
 security definer
@@ -102,13 +107,14 @@ begin
   v_number := 'SL-' || v_year || '-' || lpad(v_seq::text, 4, '0');
 
   insert into public.quotations
-    (number, employee_name, employee_email, total_amount, status, client_name)
+    (number, employee_name, employee_email, total_amount, status, client_name, edited_from)
   values
-    (v_number, p_employee_name, p_employee_email, p_total_amount, p_status, p_client_name)
+    (v_number, p_employee_name, p_employee_email, p_total_amount, p_status, p_client_name, p_edited_from)
   returning * into v_row;
 
-  insert into public.quotation_events (quotation_id, actor_email, to_status)
-  values (v_row.id, p_employee_email, p_status);
+  insert into public.quotation_events (quotation_id, actor_email, to_status, note)
+  values (v_row.id, p_employee_email, p_status,
+          case when p_edited_from is null then null else 'Edited from ' || p_edited_from end);
 
   return v_row;
 end;

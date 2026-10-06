@@ -555,8 +555,6 @@ interface RenderArgs {
   client?: ClientDetails;
   /** last valid day, YYYY-MM-DD (IST); unset = 60 days from generation */
   validUntil?: string;
-  /** 1 for the first version; shown from 2 on */
-  revision?: number;
   /** encrypted editable contents, stored in the PDF's Keywords (draft-token.ts) */
   embedded?: string;
 }
@@ -571,7 +569,6 @@ function QuotationDoc({
   photos = {},
   client,
   validUntil: validUntilYmd,
-  revision = 1,
   embedded,
 }: RenderArgs) {
   const quote = options[0];
@@ -627,10 +624,7 @@ function QuotationDoc({
         <View style={s.metaGrid}>
           <View style={s.metaCell}>
             <Text style={s.metaLabel}>Quotation No.</Text>
-            <Text style={s.metaValue}>
-              {number}
-              {revision > 1 ? `  (revision ${revision})` : ""}
-            </Text>
+            <Text style={s.metaValue}>{number}</Text>
           </View>
           <View style={s.metaCell}>
             <Text style={s.metaLabel}>Generated</Text>

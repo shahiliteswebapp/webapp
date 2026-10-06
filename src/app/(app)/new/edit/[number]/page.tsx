@@ -15,14 +15,15 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
 /*
  * Reopens a saved quotation in the wizard: loads its rooms, lights, options,
  * discounts, client details and blueprint into the draft, then goes straight
- * to the first room's lights. Saving it again keeps the same number.
+ * to the first room's lights. Saving it makes a NEW quotation with its own
+ * number; the original stays as it was.
  */
 export default function EditQuotationPage() {
   const { number } = useParams<{ number: string }>();
   const router = useRouter();
   const { loaded, draft, loadDraft } = useDraft();
   const [error, setError] = useState<string | null>(null);
-  // Made before saving existed: offer to rebuild it under the same number.
+  // Made before saving existed: offer to rebuild it (as a new quotation).
   const [notSaved, setNotSaved] = useState<{ clientName?: string } | null>(null);
   // An unsaved draft of something else is in progress: ask before replacing it.
   const [confirmReplace, setConfirmReplace] = useState(false);
@@ -111,7 +112,7 @@ export default function EditQuotationPage() {
         <p className="text-sm text-muted">
           {number} was made before quotations were saved, so its rooms and lights were never
           stored. Rebuild it here: add the blueprint, rooms and lights again, and it is saved
-          under the same number {number}. From then on it can be edited like any other.
+          as a new quotation with a new number, marked as replacing {number}.
         </p>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button onClick={() => void rebuild()}>Rebuild {number}</Button>

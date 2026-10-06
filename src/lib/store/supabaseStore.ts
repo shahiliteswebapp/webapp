@@ -7,7 +7,6 @@ import type {
   QuotationFilter,
   QuotationRecord,
   QuotationStatus,
-  UpdateQuotationInput,
 } from "../types";
 
 /*
@@ -47,8 +46,7 @@ interface QuotationRow {
   review_note: string | null;
   // added with saved/editable quotations; absent until schema.sql is re-run
   client_name?: string | null;
-  revision?: number | null;
-  updated_at?: string | null;
+  edited_from?: string | null;
 }
 
 /*
@@ -100,8 +98,7 @@ function mapRecord(r: QuotationRow): QuotationRecord {
     reviewedAt: r.reviewed_at ?? undefined,
     reviewNote: r.review_note ?? undefined,
     clientName: r.client_name ?? undefined,
-    revision: r.revision ?? undefined,
-    updatedAt: r.updated_at ?? undefined,
+    editedFrom: r.edited_from ?? undefined,
   };
 }
 
@@ -201,68 +198,21 @@ export async function createQuotation(
     p_total_amount: input.totalAmount,
     p_status: input.status,
   };
-  let { data, error } = await getSupabase().rpc("create_quotation", {
-    ...args,
-    p_client_name: input.clientName ?? null,
-  });
-  if (error && schemaOutdated(error)) {
-    console.warn("create_quotation: re-run supabase/schema.sql to store client names");
-    ({ data, error } = await getSupabase().rpc("create_quotation", args));
+  // Newest signature first; older databases (schema.sql not re-run) fall back.
+  const attempts = [
+    { ...args, p_client_name: input.clientName ?? null, p_edited_from: input.editedFrom ?? null },
+    { ...args, p_client_name: input.clientName ?? null },
+    args,
+  ];
+  let data: unknown = null;
+  let error: Parameters<typeof dbError>[0] | null = null;
+  for (const attempt of attempts) {
+    ({ data, error } = await getSupabase().rpc("create_quotation", attempt));
+    if (!error || !schemaOutdated(error)) break;
+    console.warn("create_quotation: re-run supabase/schema.sql for client names / edit links");
   }
   if (error) throw dbError(error);
   const row = (Array.isArray(data) ? data[0] : data) as QuotationRow;
-  return mapRecord(row);
-}
-
-/*
- * Record an edit: new total, client and status; revision + 1; any earlier
- * review decision is cleared (it was about the old version). Falls back to
- * total + status only on a database that predates those columns.
- */
-export async function updateQuotation(
-  id: string,
-  input: UpdateQuotationInput,
-): Promise<QuotationRecord | null> {
-  const column = UUID_RE.test(id) ? "id" : "number";
-  const sb = getSupabase();
-  const current = await getQuotation(id);
-  if (!current) return null;
-
-  const base = {
-    total_amount: input.totalAmount,
-    status: input.status,
-    reviewed_by: null,
-    reviewed_at: null,
-    review_note: null,
-  };
-  const revision = (current.revision ?? 1) + 1;
-  let { data, error } = await sb
-    .from("quotations")
-    .update({
-      ...base,
-      ...(input.clientName ? { client_name: input.clientName } : {}),
-      revision,
-      updated_at: new Date().toISOString(),
-    })
-    .eq(column, id)
-    .select("*")
-    .maybeSingle();
-  if (error && schemaOutdated(error)) {
-    console.warn("updateQuotation: re-run supabase/schema.sql to store revisions");
-    ({ data, error } = await sb.from("quotations").update(base).eq(column, id).select("*").maybeSingle());
-  }
-  if (error) throw dbError(error);
-  if (!data) return null;
-
-  const row = data as QuotationRow;
-  const { error: evErr } = await sb.from("quotation_events").insert({
-    quotation_id: row.id,
-    actor_email: input.actorEmail.toLowerCase(),
-    from_status: current.status,
-    to_status: input.status,
-    note: `Edited (revision ${revision})`,
-  });
-  if (evErr) throw dbError(evErr);
   return mapRecord(row);
 }
 

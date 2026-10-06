@@ -9,7 +9,6 @@ import type {
   QuotationFilter,
   QuotationRecord,
   QuotationStatus,
-  UpdateQuotationInput,
 } from "../types";
 
 /*
@@ -146,7 +145,7 @@ export async function createQuotation(
       totalAmount: input.totalAmount,
       createdAt: now.toISOString(),
       clientName: input.clientName || undefined,
-      revision: 1,
+      editedFrom: input.editedFrom || undefined,
     };
     db.quotations.push(record);
     db.events.push({
@@ -155,46 +154,7 @@ export async function createQuotation(
       at: now.toISOString(),
       actorEmail: record.employeeEmail,
       to: record.status,
-    });
-
-    await write(db);
-    return record;
-  });
-}
-
-/**
- * Record an edit of a saved quotation: new total, client and status (the
- * action the editor chose). Any earlier review decision is cleared, since it
- * was about the old version.
- */
-export async function updateQuotation(
-  id: string,
-  input: UpdateQuotationInput,
-): Promise<QuotationRecord | null> {
-  return serialize(async () => {
-    const db = await read();
-    const record = db.quotations.find((r) => r.id === id || r.number === id);
-    if (!record) return null;
-
-    const from = record.status;
-    const now = new Date().toISOString();
-    record.totalAmount = input.totalAmount;
-    record.status = input.status;
-    if (input.clientName) record.clientName = input.clientName;
-    record.updatedAt = now;
-    record.revision = (record.revision ?? 1) + 1;
-    record.reviewedBy = undefined;
-    record.reviewedAt = undefined;
-    record.reviewNote = undefined;
-
-    db.events.push({
-      id: randomUUID(),
-      quotationId: record.id,
-      at: now,
-      actorEmail: input.actorEmail.toLowerCase(),
-      from,
-      to: input.status,
-      note: `Edited (revision ${record.revision})`,
+      note: record.editedFrom ? `Edited from ${record.editedFrom}` : undefined,
     });
 
     await write(db);

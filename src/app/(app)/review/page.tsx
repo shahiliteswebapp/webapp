@@ -41,38 +41,31 @@ export default async function ReviewPage() {
       {recent.length > 0 && (
         <section className="space-y-3">
           <Eyebrow>Recent decisions</Eyebrow>
-          <div className="overflow-x-auto rounded-[var(--radius-card)] border border-hairline">
-            <table className="w-full min-w-[560px] text-sm">
-              <thead className="bg-panel text-left text-xs uppercase tracking-wider text-muted">
-                <tr>
-                  <th className="px-4 py-2.5 font-semibold">Number</th>
-                  <th className="px-4 py-2.5 font-semibold">Employee</th>
-                  <th className="px-4 py-2.5 font-semibold">Decision</th>
-                  <th className="px-4 py-2.5 font-semibold">Decided</th>
-                  <th className="px-4 py-2.5 font-semibold">Note</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-hairline">
-                {recent.map((q) => (
-                  <tr key={q.id}>
-                    <td className="px-4 py-2.5 font-medium text-ink">
-                      {q.number}
-                    </td>
-                    <td className="px-4 py-2.5 text-muted">{q.employeeName}</td>
-                    <td className="px-4 py-2.5">
-                      <StatusBadge status={q.status} />
-                    </td>
-                    <td className="px-4 py-2.5 text-muted">
-                      {q.reviewedAt ? fmtDateTime(q.reviewedAt) : "-"}
-                    </td>
-                    <td className="px-4 py-2.5 text-muted">
-                      {q.reviewNote || "-"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {recent.map((q) => (
+              <li
+                key={q.id}
+                className="space-y-2 rounded-[var(--radius-card)] border border-hairline bg-paper p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-ink">{q.number}</p>
+                    <p className="truncate text-xs text-muted">
+                      {[q.clientName, q.employeeName].filter(Boolean).join(" · ")}
+                    </p>
+                  </div>
+                  <StatusBadge status={q.status} />
+                </div>
+                <p className="text-xs text-faint">
+                  Decided {q.reviewedAt ? fmtDateTime(q.reviewedAt) : "-"}
+                  {q.editedFrom ? ` · edited from ${q.editedFrom}` : ""}
+                </p>
+                {q.reviewNote && (
+                  <p className="rounded-md bg-panel/60 px-2.5 py-1.5 text-sm text-ink">{q.reviewNote}</p>
+                )}
+              </li>
+            ))}
+          </ul>
         </section>
       )}
     </div>

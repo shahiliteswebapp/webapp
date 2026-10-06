@@ -36,10 +36,8 @@ export interface QuotationRecord {
   reviewNote?: string;
   /** client the quotation is for (from the client details form) */
   clientName?: string;
-  /** ISO timestamp of the last edit; unset until the first edit */
-  updatedAt?: string;
-  /** 1 for the first version, +1 per edit */
-  revision?: number;
+  /** set when this quotation was made by editing another: that one's number */
+  editedFrom?: string;
 }
 
 /** Who may reopen and edit a quotation: the superadmin always, an employee only their own. */
@@ -97,13 +95,8 @@ export interface CreateQuotationInput {
   /** "downloaded" (no review requested) or "submitted_for_review" */
   status: Extract<QuotationStatus, "downloaded" | "submitted_for_review">;
   clientName?: string;
-}
-
-export interface UpdateQuotationInput {
-  totalAmount: number;
-  status: Extract<QuotationStatus, "downloaded" | "submitted_for_review">;
-  clientName?: string;
-  actorEmail: string;
+  /** an edit of another quotation: that one's number (it keeps its own) */
+  editedFrom?: string;
 }
 
 /* ---- client details, typed in just before the PDF is generated ---- */

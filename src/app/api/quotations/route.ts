@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { computeOptions } from "@/lib/quote";
-import { createQuotation, getQuotation, updateQuotation } from "@/lib/store";
+import { createQuotation, getQuotation } from "@/lib/store";
 import { saveQuoteFiles, type SavedDraft } from "@/lib/quote-files";
 import { encodeDraftToken } from "@/lib/pdf/draft-token";
 import { defaultValidUntil, isValidValidUntil } from "@/lib/format";
@@ -32,7 +32,7 @@ interface Body {
   client?: ClientDetails;
   /** last valid day, YYYY-MM-DD (IST); unset = 60 days */
   validUntil?: string;
-  /** set when saving an edit of an existing quotation */
+  /** set when saving an edit of an existing quotation (it gets a NEW number) */
   editOf?: string;
   /** larger blueprint preview, saved so the quotation can be reopened */
   blueprintSaveDataUrl?: string;
@@ -129,20 +129,18 @@ export async function POST(req: Request) {
 
   // The ledger keeps one amount: Option 1's grand total.
   const status = forReview ? "submitted_for_review" : "downloaded";
-  const record = existing
-    ? await updateQuotation(existing.id, {
-        totalAmount: quote.grandTotal,
-        status,
-        clientName: client.name,
-        actorEmail: session.email,
-      })
-    : await createQuotation({
-        employeeName: session.name,
-        employeeEmail: session.email,
-        totalAmount: quote.grandTotal,
-        status,
-        clientName: client.name,
-      });
+  // An edit is always a NEW quotation with its own number; the one it came
+  // from stays exactly as it was. The edit stays with that quotation's
+  // employee, so they keep seeing (and can keep editing) their work even when
+  // the superadmin made the change.
+  const record = await createQuotation({
+    employeeName: existing?.employeeName ?? session.name,
+    employeeEmail: existing?.employeeEmail ?? session.email,
+    totalAmount: quote.grandTotal,
+    status,
+    clientName: client.name,
+    editedFrom: existing?.number,
+  });
   if (!record) {
     return NextResponse.json({ error: "Could not save the quotation." }, { status: 500 });
   }
@@ -165,12 +163,12 @@ export async function POST(req: Request) {
     pdf = await renderQuotationPdf({
       photos,
       number: record.number,
-      createdAtISO: record.updatedAt ?? record.createdAt,
-      // An edit keeps the original author's name on the quotation.
+      createdAtISO: record.createdAt,
+      // An edit keeps the original author's name on the quotation. The
+      // PDF never says it was edited; only the superadmin sees that, in-app.
       employeeName: record.employeeName,
       client,
       validUntil,
-      revision: record.revision,
       options,
       blueprintDataUrl: body.blueprintPreviewDataUrl,
       blueprintName: body.blueprintName,
@@ -219,7 +217,7 @@ export async function POST(req: Request) {
       const r = await sendQuotationEmail({
         number: record.number,
         pdf,
-        edited: !!existing,
+        editedFrom: existing?.number,
         optionTotals: options.map((q) => q.grandTotal),
         applyGst: quote.applyGst,
         employeeName: session.name,
@@ -241,8 +239,7 @@ export async function POST(req: Request) {
     status: record.status,
     transport,
     saved,
-    edited: !!existing,
-    revision: record.revision ?? 1,
+    editedFrom: record.editedFrom,
     validUntil,
     emailError,
     // Offered as a download straight away (the saved copy is also at

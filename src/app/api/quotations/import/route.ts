@@ -15,7 +15,8 @@ export const dynamic = "force-dynamic";
  * reads the PDF (pdf.js) and sends its Keywords plus its text with positions.
  *
  *  1. The PDF is a quotation this person may edit and its saved copy exists:
- *     reopen that (exact, with the blueprint). It keeps its number.
+ *     reopen that (exact, with the blueprint). Saving makes a new
+ *     quotation, marked as edited from it.
  *  2. The PDF carries its own encrypted contents: use those.
  *  3. Otherwise read the printed text (older PDFs).
  *

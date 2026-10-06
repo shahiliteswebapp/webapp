@@ -54,8 +54,8 @@ export async function sendQuotationEmail(args: {
   applyGst?: boolean;
   employeeName: string;
   employeeEmail: string;
-  /** an edited version of an existing quotation */
-  edited?: boolean;
+  /** made by editing this quotation (the email goes to the superadmin) */
+  editedFrom?: string;
 }): Promise<SendResult> {
   const { from, pass } = senderPass();
   const to = reviewerEmail();
@@ -71,7 +71,7 @@ export async function sendQuotationEmail(args: {
   if (!pass) return { transport: "stub", to };
 
   return send(to, from, pass, {
-    subject: `Shahi Lites: Quotation ${args.number}${args.edited ? " (edited)" : ""} for review`,
+    subject: `Shahi Lites: Quotation ${args.number}${args.editedFrom ? ` (edited from ${args.editedFrom})` : ""} for review`,
     cc,
     text: [
       `Quotation ${args.number}`,

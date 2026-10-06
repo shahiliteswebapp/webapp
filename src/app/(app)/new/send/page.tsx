@@ -109,7 +109,7 @@ export default function SendPage() {
         status: data.status ?? "",
       });
       if (data.saved) q.set("saved", "1");
-      if (data.edited) q.set("rev", String(data.revision ?? 2));
+      if (data.editedFrom) q.set("from", data.editedFrom);
       if (!quote.applyGst) q.set("gst", "0");
       if (data.validUntil) q.set("valid", data.validUntil);
       if (data.emailError) q.set("emailError", data.emailError);
@@ -127,7 +127,8 @@ export default function SendPage() {
         <h1 className="font-display text-4xl text-ink-deep">Finish up</h1>
         {editing && (
           <p className="mt-1 text-sm text-muted">
-            Editing <span className="font-medium text-ink">{editing}</span>. It keeps its number.
+            Editing <span className="font-medium text-ink">{editing}</span>. Saving makes a new
+            quotation with a new number; {editing} stays as it is.
           </p>
         )}
         <div className="mt-4">
@@ -193,7 +194,7 @@ export default function SendPage() {
           <div className="flex items-baseline justify-between">
             <Eyebrow>Quotation</Eyebrow>
             <span className="text-xs text-faint">
-              {editing ? editing : "Number assigned when you continue"}
+              {editing ? `New number, replaces ${editing}` : "Number assigned when you continue"}
             </span>
           </div>
 

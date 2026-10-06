@@ -25,7 +25,7 @@ export async function GET(
   const saved = await readQuoteDraft(record.number);
   if (!saved) {
     // Made before quotations were saved: its rooms and lights were never
-    // stored. The editor can rebuild it under the same number.
+    // stored. The editor can rebuild it as a new quotation.
     return NextResponse.json(
       {
         notSaved: true,
