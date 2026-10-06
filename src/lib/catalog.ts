@@ -277,8 +277,8 @@ export function variantLabel(pick: { interfaceTag?: InterfaceTag; control?: Cont
  * "SL-F0001" (functional) or "SL-D0001" (decorative). Built-in items carry
  * theirs in catalog-data.json; uploaded items get the next free number when a
  * superadmin adds them (catalog-store.ts). Numbers are never reused or
- * renumbered. Supplier codes, brands and supplier model names stay inside
- * the app and never reach a client.
+ * renumbered. The SKU and clientName() are for the client's PDF only; inside
+ * the app everyone sees the vendor's own names and codes.
  */
 export const SKU_PREFIX = { functional: "SL-F", decorative: "SL-D" } as const;
 

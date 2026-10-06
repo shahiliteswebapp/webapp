@@ -6,7 +6,6 @@ import { Button, Eyebrow } from "@/components/ui";
 import {
   BUILTIN_SYSTEMS,
   UNIT_LABEL,
-  skuOf,
   systemImages,
   type LightingSystem,
 } from "@/lib/catalog";
@@ -25,7 +24,6 @@ function haystack(s: LightingSystem): string {
   return [
     s.name,
     s.sourceCode,
-    s.slSku,
     s.company,
     s.kind === "functional" ? s.category : s.decorType,
     s.kind === "decorative" ? s.sku : null,
@@ -160,7 +158,7 @@ export function CatalogManager({
             <div className="min-w-0 flex-1">
               <p className="truncate text-ink">{s.name}</p>
               <p className="truncate text-xs text-faint">
-                {skuOf(s)} · {s.kind === "functional" ? "Functional" : "Decorative"} · supplier {s.sourceCode}
+                {s.kind === "functional" ? "Functional" : "Decorative"} · {s.sourceCode}
                 {s.uploaded ? " · uploaded" : ""}
               </p>
             </div>

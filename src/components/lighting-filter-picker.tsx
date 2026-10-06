@@ -24,7 +24,6 @@ import {
   type FunctionalSystem,
   type InterfaceTag,
   type LightingSystem,
-  skuOf,
 } from "@/lib/catalog";
 import {
   LAYER_OPTIONS,
@@ -276,7 +275,7 @@ function searchAll(query: string) {
   const compact = q.replace(/[\s-]+/g, "");
   const hits: { s: (typeof LIGHTING_SYSTEMS)[number]; rank: number }[] = [];
   for (const s of LIGHTING_SYSTEMS) {
-    const codes = [s.sourceCode, s.slSku ?? ""].map((c) => c.toLowerCase().replace(/[\s-]+/g, ""));
+    const codes = [s.sourceCode].map((c) => c.toLowerCase().replace(/[\s-]+/g, ""));
     const name = s.name.toLowerCase();
     const rank = codes.some((c) => c && c.startsWith(compact))
       ? 0
@@ -744,7 +743,7 @@ function ResultList<T extends LightingSystem>({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-ink">{s.name}</span>
                     <span className="block truncate text-[11px] text-faint">
-                      {[skuOf(s), s.size].filter(Boolean).join(" · ")}
+                      {[s.sourceCode, s.size].filter(Boolean).join(" · ")}
                     </span>
                   </span>
                   <span className="shrink-0 tabular-nums text-faint">

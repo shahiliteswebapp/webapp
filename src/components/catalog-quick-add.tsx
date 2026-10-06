@@ -230,9 +230,8 @@ export function CatalogQuickAdd() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? `Save failed (${res.status})`);
-      const sku = (data.skus as { slSku?: string }[] | undefined)?.[0]?.slSku;
       setDone(
-        `Added "${item.name}"${sku ? ` as ${sku}` : ""}${
+        `Added "${item.name}"${
           urls.length ? ` with ${urls.length} photo${urls.length === 1 ? "" : "s"}` : ""
         }.`,
       );
@@ -279,7 +278,7 @@ export function CatalogQuickAdd() {
         <Field label="Product name *">
           <input value={f.name} onChange={(e) => set("name", e.target.value)} className={inputClass} />
         </Field>
-        <Field label="Supplier code" hint="Internal only. Clients see the Shahi Lites SKU, assigned automatically.">
+        <Field label="Supplier code" hint="Shown in the app. The client's PDF shows a Shahi Lites SKU instead.">
           <input value={f.code} onChange={(e) => set("code", e.target.value)} className={inputClass} />
         </Field>
         <Field label="Brand">
