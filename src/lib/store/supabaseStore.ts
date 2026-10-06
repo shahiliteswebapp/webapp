@@ -7,6 +7,7 @@ import type {
   QuotationFilter,
   QuotationRecord,
   QuotationStatus,
+  UpdateQuotationInput,
 } from "../types";
 
 /*
@@ -154,6 +155,22 @@ export async function listEvents(
   return (data as EventRow[]).map(mapEvent);
 }
 
+/** Rejections per employee (lower-case email -> count), from the event log. */
+export async function rejectionCounts(): Promise<Map<string, number>> {
+  const { data, error } = await getSupabase()
+    .from("quotation_events")
+    .select("quotation_id, quotations(employee_email)")
+    .eq("to_status", "rejected");
+  if (error) throw dbError(error);
+  const out = new Map<string, number>();
+  for (const row of (data ?? []) as { quotations: { employee_email: string } | { employee_email: string }[] | null }[]) {
+    const q = Array.isArray(row.quotations) ? row.quotations[0] : row.quotations;
+    const email = q?.employee_email?.toLowerCase();
+    if (email) out.set(email, (out.get(email) ?? 0) + 1);
+  }
+  return out;
+}
+
 export async function createQuotation(
   input: CreateQuotationInput,
 ): Promise<QuotationRecord> {
@@ -165,6 +182,46 @@ export async function createQuotation(
   });
   if (error) throw dbError(error);
   const row = (Array.isArray(data) ? data[0] : data) as QuotationRow;
+  return mapRecord(row);
+}
+
+/*
+ * Record an edit. The live schema has no client / revision columns yet, so
+ * only the total and status change here (the JSON store keeps the rest).
+ */
+export async function updateQuotation(
+  id: string,
+  input: UpdateQuotationInput,
+): Promise<QuotationRecord | null> {
+  const column = UUID_RE.test(id) ? "id" : "number";
+  const sb = getSupabase();
+  const current = await getQuotation(id);
+  if (!current) return null;
+
+  const { data, error } = await sb
+    .from("quotations")
+    .update({
+      total_amount: input.totalAmount,
+      status: input.status,
+      reviewed_by: null,
+      reviewed_at: null,
+      review_note: null,
+    })
+    .eq(column, id)
+    .select("*")
+    .maybeSingle();
+  if (error) throw dbError(error);
+  if (!data) return null;
+
+  const row = data as QuotationRow;
+  const { error: evErr } = await sb.from("quotation_events").insert({
+    quotation_id: row.id,
+    actor_email: input.actorEmail.toLowerCase(),
+    from_status: current.status,
+    to_status: input.status,
+    note: "Edited",
+  });
+  if (evErr) throw dbError(evErr);
   return mapRecord(row);
 }
 

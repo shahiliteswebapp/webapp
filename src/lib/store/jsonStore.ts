@@ -9,6 +9,7 @@ import type {
   QuotationFilter,
   QuotationRecord,
   QuotationStatus,
+  UpdateQuotationInput,
 } from "../types";
 
 /*
@@ -109,6 +110,23 @@ export async function listEvents(quotationId: string): Promise<QuotationEvent[]>
     .sort((a, b) => (a.at < b.at ? -1 : 1));
 }
 
+/**
+ * Rejections per employee (lower-case email -> count). Counts every
+ * rejection ever made, so a rejected quotation that was later edited and
+ * resubmitted still counts.
+ */
+export async function rejectionCounts(): Promise<Map<string, number>> {
+  const db = await read();
+  const owner = new Map(db.quotations.map((q) => [q.id, q.employeeEmail.toLowerCase()]));
+  const out = new Map<string, number>();
+  for (const e of db.events) {
+    if (e.to !== "rejected") continue;
+    const email = owner.get(e.quotationId);
+    if (email) out.set(email, (out.get(email) ?? 0) + 1);
+  }
+  return out;
+}
+
 export async function createQuotation(
   input: CreateQuotationInput,
 ): Promise<QuotationRecord> {
@@ -127,6 +145,8 @@ export async function createQuotation(
       status: input.status,
       totalAmount: input.totalAmount,
       createdAt: now.toISOString(),
+      clientName: input.clientName || undefined,
+      revision: 1,
     };
     db.quotations.push(record);
     db.events.push({
@@ -135,6 +155,46 @@ export async function createQuotation(
       at: now.toISOString(),
       actorEmail: record.employeeEmail,
       to: record.status,
+    });
+
+    await write(db);
+    return record;
+  });
+}
+
+/**
+ * Record an edit of a saved quotation: new total, client and status (the
+ * action the editor chose). Any earlier review decision is cleared, since it
+ * was about the old version.
+ */
+export async function updateQuotation(
+  id: string,
+  input: UpdateQuotationInput,
+): Promise<QuotationRecord | null> {
+  return serialize(async () => {
+    const db = await read();
+    const record = db.quotations.find((r) => r.id === id || r.number === id);
+    if (!record) return null;
+
+    const from = record.status;
+    const now = new Date().toISOString();
+    record.totalAmount = input.totalAmount;
+    record.status = input.status;
+    if (input.clientName) record.clientName = input.clientName;
+    record.updatedAt = now;
+    record.revision = (record.revision ?? 1) + 1;
+    record.reviewedBy = undefined;
+    record.reviewedAt = undefined;
+    record.reviewNote = undefined;
+
+    db.events.push({
+      id: randomUUID(),
+      quotationId: record.id,
+      at: now,
+      actorEmail: input.actorEmail.toLowerCase(),
+      from,
+      to: input.status,
+      note: `Edited (revision ${record.revision})`,
     });
 
     await write(db);

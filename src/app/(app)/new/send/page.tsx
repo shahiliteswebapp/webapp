@@ -7,16 +7,28 @@ import { Button, ButtonLink, Card, Eyebrow } from "@/components/ui";
 import { COMPANY, EMAIL, QUOTE, disclaimer } from "@/lib/config";
 import { useDraft } from "@/lib/draft/context";
 import { downscaleDataUrl } from "@/lib/draft/render";
-import { money } from "@/lib/format";
+import {
+  MAX_VALIDITY_DAYS,
+  addDays,
+  daysUntil,
+  defaultValidUntil,
+  fmtYmd,
+  isValidValidUntil,
+  money,
+  ymd,
+} from "@/lib/format";
 import { computeOptions, optionLabel } from "@/lib/quote";
 import { cx } from "@/lib/cx";
-import { draftStarted } from "@/lib/types";
+import { draftStarted, type ClientDetails } from "@/lib/types";
+
+const inputClass =
+  "w-full rounded-md border border-hairline bg-paper px-3 py-2 text-base text-ink outline-none focus:border-gold sm:text-sm";
 
 type Action = "review" | "download";
 
 export default function SendPage() {
   const router = useRouter();
-  const { loaded, draft, discard, setApplyGst } = useDraft();
+  const { loaded, draft, discard, setApplyGst, setClient, setValidUntil } = useDraft();
   const [busy, setBusy] = useState<Action | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,15 +47,26 @@ export default function SendPage() {
   const options = computeOptions(draft);
   const quote = options[0];
   const multi = options.length > 1;
-  const canSend = options.every((q) => q.grandTotal > 0);
+  const client: ClientDetails = draft.client ?? { name: "" };
+  const hasClient = client.name.trim().length > 0;
+  const canSend = options.every((q) => q.grandTotal > 0) && hasClient;
+  const editing = draft.editOf;
+  const today = ymd(new Date());
+  const maxValid = ymd(addDays(new Date(), MAX_VALIDITY_DAYS));
+  // A date saved on an earlier version may have passed: fall back to 60 days.
+  const untilYmd = isValidValidUntil(draft.validUntil) ? draft.validUntil : defaultValidUntil();
+  const validUntil = fmtYmd(untilYmd);
+  const validDays = daysUntil(untilYmd);
+  const patchClient = (patch: Partial<ClientDetails>) => setClient({ ...client, ...patch });
 
   const submit = async (action: Action) => {
     setBusy(action);
     setError(null);
     try {
-      const thumb = draft.blueprint
-        ? await downscaleDataUrl(draft.blueprint.previewDataUrl, 1000)
-        : undefined;
+      const bp = draft.blueprint;
+      const thumb = bp ? await downscaleDataUrl(bp.previewDataUrl, 1000) : undefined;
+      // A sharper copy is saved with the quotation, for editing it later.
+      const keep = bp ? await downscaleDataUrl(bp.previewDataUrl, 1800) : undefined;
       const res = await fetch("/api/quotations", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -54,6 +77,13 @@ export default function SendPage() {
           applyGst: quote.applyGst,
           discount: draft.discount,
           optionCount: options.length,
+          client,
+          validUntil: untilYmd,
+          editOf: editing,
+          blueprintSaveDataUrl: keep,
+          blueprintMeta: bp
+            ? { kind: bp.kind, width: bp.width, height: bp.height, pageCount: bp.pageCount }
+            : undefined,
           action,
         }),
       });
@@ -76,9 +106,11 @@ export default function SendPage() {
         number: data.number,
         transport: data.transport,
         status: data.status ?? "",
-        saved: data.savedTo ?? "",
       });
+      if (data.saved) q.set("saved", "1");
+      if (data.edited) q.set("rev", String(data.revision ?? 2));
       if (!quote.applyGst) q.set("gst", "0");
+      if (data.validUntil) q.set("valid", data.validUntil);
       if (data.emailError) q.set("emailError", data.emailError);
       router.replace(`/new/sent?${q.toString()}`);
     } catch {
@@ -92,21 +124,110 @@ export default function SendPage() {
       <div className="border-b border-hairline pb-5">
         <Eyebrow>Start New</Eyebrow>
         <h1 className="font-display text-4xl text-ink-deep">Finish up</h1>
+        {editing && (
+          <p className="mt-1 text-sm text-muted">
+            Editing <span className="font-medium text-ink">{editing}</span>. It keeps its number.
+          </p>
+        )}
         <div className="mt-4">
           <WizardSteps current={4} />
         </div>
       </div>
 
       <div className="mx-auto max-w-xl space-y-5">
+        <Card className="space-y-3">
+          <div className="flex items-baseline justify-between gap-2">
+            <Eyebrow>Client details</Eyebrow>
+            <span className="text-xs text-faint">Printed on the PDF</span>
+          </div>
+          <label className="block space-y-1">
+            <span className="text-xs text-muted">
+              Client name <span className="text-gold-deep">*</span>
+            </span>
+            <input
+              value={client.name}
+              onChange={(e) => patchClient({ name: e.target.value })}
+              placeholder="e.g. Mr. Rajesh Mathur"
+              autoComplete="off"
+              className={inputClass}
+            />
+          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block space-y-1">
+              <span className="text-xs text-muted">Phone</span>
+              <input
+                type="tel"
+                inputMode="tel"
+                value={client.phone ?? ""}
+                onChange={(e) => patchClient({ phone: e.target.value })}
+                placeholder="+91"
+                autoComplete="off"
+                className={inputClass}
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs text-muted">Email</span>
+              <input
+                type="email"
+                inputMode="email"
+                value={client.email ?? ""}
+                onChange={(e) => patchClient({ email: e.target.value })}
+                autoComplete="off"
+                className={inputClass}
+              />
+            </label>
+          </div>
+          <label className="block space-y-1">
+            <span className="text-xs text-muted">Site address</span>
+            <textarea
+              rows={2}
+              value={client.address ?? ""}
+              onChange={(e) => patchClient({ address: e.target.value })}
+              className={cx(inputClass, "resize-none")}
+            />
+          </label>
+        </Card>
+
         <Card className="space-y-4">
           <div className="flex items-baseline justify-between">
             <Eyebrow>Quotation</Eyebrow>
             <span className="text-xs text-faint">
-              Number assigned when you continue
+              {editing ? editing : "Number assigned when you continue"}
             </span>
           </div>
 
           <dl className="space-y-1.5 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-muted">
+                <label htmlFor="valid-until">Valid until</label>
+                <span className="block text-xs text-faint">
+                  {validDays} day{validDays === 1 ? "" : "s"} from today
+                </span>
+              </dt>
+              <dd className="flex flex-col items-end gap-1">
+                <input
+                  id="valid-until"
+                  type="date"
+                  value={untilYmd}
+                  min={today}
+                  max={maxValid}
+                  disabled={busy !== null}
+                  onChange={(e) =>
+                    setValidUntil(isValidValidUntil(e.target.value) ? e.target.value : undefined)
+                  }
+                  className="rounded-md border border-hairline bg-paper px-2 py-1 text-sm text-ink outline-none focus:border-gold"
+                />
+                {draft.validUntil && draft.validUntil !== defaultValidUntil() && (
+                  <button
+                    type="button"
+                    onClick={() => setValidUntil(undefined)}
+                    className="text-xs text-gold-deep hover:underline"
+                  >
+                    Reset to {QUOTE.validityDays} days
+                  </button>
+                )}
+              </dd>
+            </div>
             <div className="flex justify-between">
               <dt className="text-muted">Rooms</dt>
               <dd className="text-ink">{draft.rooms.length}</dd>
@@ -176,17 +297,20 @@ export default function SendPage() {
               asked to review it.
             </li>
             <li>
-              Either way, this draft (any blueprint and the line items) is cleared
-              from this device. It is never stored on a server.
+              Either way, the PDF and its rooms and lights are saved. Open it
+              from History to view or edit it later.
             </li>
           </ul>
         </Card>
 
         <p className="rounded-md border border-gold/40 bg-gold-tint px-3 py-2 text-xs text-ink-deep">
-          {disclaimer(quote.applyGst)}
+          {disclaimer(quote.applyGst, validUntil)}
         </p>
 
-        {!canSend && (
+        {!hasClient && (
+          <p className="text-center text-xs text-gold-deep">Enter the client&apos;s name to continue.</p>
+        )}
+        {hasClient && !canSend && (
           <p className="text-center text-xs text-faint">
             {multi
               ? "Every option needs at least one priced light before it can be generated."

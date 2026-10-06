@@ -22,8 +22,8 @@ export default async function ReviewPage() {
       <PageHeader eyebrow="Superadmin" title="Review queue" />
 
       <p className="text-sm text-muted">
-        The quotation PDF, emailed to your Gmail, is the document under
-        review. Quotation contents are not stored here, so decide by number.
+        Open each quotation&apos;s PDF here (or in your Gmail), then approve
+        or reject it. Every quotation stays editable after a decision.
       </p>
 
       <section className="space-y-3">

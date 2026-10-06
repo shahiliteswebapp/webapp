@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BlueprintViewer } from "@/components/blueprint-viewer";
@@ -572,6 +573,14 @@ export default function RoomLightingPage() {
       <div className="border-b border-hairline pb-5">
         <Eyebrow>Start New</Eyebrow>
         <h1 className="font-display text-4xl text-ink-deep">Lighting</h1>
+        {draft.editOf && (
+          <p className="mt-1 text-sm text-muted">
+            Editing <span className="font-medium text-ink">{draft.editOf}</span> ·{" "}
+            <Link href="/new" className="font-medium text-gold-deep hover:underline">
+              {draft.blueprint ? "Change blueprint" : "Add a blueprint"}
+            </Link>
+          </p>
+        )}
         <div className="mt-4">
           <WizardSteps current={3} />
         </div>

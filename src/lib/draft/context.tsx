@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { MAX_OPTIONS, type Discount, type DraftBlueprint, type QuoteDraft, type RoomLine } from "@/lib/types";
+import { MAX_OPTIONS, type ClientDetails, type Discount, type DraftBlueprint, type QuoteDraft, type RoomLine } from "@/lib/types";
 import { idbClear, idbGet, idbSet } from "./idb";
 
 interface DraftContextValue {
@@ -19,6 +19,8 @@ interface DraftContextValue {
   setBlueprint: (bp: DraftBlueprint) => Promise<void>;
   /** start a quotation with no blueprint */
   skipBlueprint: () => void;
+  /** drop the blueprint, keeping every room and light */
+  removeBlueprint: () => void;
   setApplyGst: (v: boolean) => void;
   setRoomDiscount: (id: string, d: Discount | undefined) => void;
   setQuoteDiscount: (d: Discount | undefined) => void;
@@ -30,6 +32,11 @@ interface DraftContextValue {
   removeRoom: (id: string) => void;
   moveRoom: (id: string, dir: -1 | 1) => void;
   setRoomLines: (id: string, lines: RoomLine[]) => void;
+  setClient: (c: ClientDetails) => void;
+  /** YYYY-MM-DD, or undefined for the default 60 days */
+  setValidUntil: (v: string | undefined) => void;
+  /** replace the whole draft (reopening a saved quotation to edit it) */
+  loadDraft: (d: QuoteDraft) => Promise<void>;
   discard: () => Promise<void>;
 }
 
@@ -113,6 +120,14 @@ export function DraftProvider({ children }: { children: ReactNode }) {
 
   const skipBlueprint = useCallback(() => {
     mutate((d) => {
+      d.noBlueprint = true;
+      return d;
+    });
+  }, [mutate]);
+
+  const removeBlueprint = useCallback(() => {
+    mutate((d) => {
+      d.blueprint = undefined;
       d.noBlueprint = true;
       return d;
     });
@@ -233,6 +248,36 @@ export function DraftProvider({ children }: { children: ReactNode }) {
     [mutate],
   );
 
+  const setClient = useCallback(
+    (c: ClientDetails) => {
+      mutate((d) => {
+        d.client = c;
+        return d;
+      });
+    },
+    [mutate],
+  );
+
+  const setValidUntil = useCallback(
+    (v: string | undefined) => {
+      mutate((d) => {
+        d.validUntil = v;
+        return d;
+      });
+    },
+    [mutate],
+  );
+
+  const loadDraft = useCallback(async (d: QuoteDraft) => {
+    d.updatedAt = new Date().toISOString();
+    setDraft(d);
+    try {
+      await idbSet(d);
+    } catch {
+      /* best-effort persistence */
+    }
+  }, []);
+
   const discard = useCallback(async () => {
     setDraft(null);
     try {
@@ -249,6 +294,7 @@ export function DraftProvider({ children }: { children: ReactNode }) {
       blueprintUrl,
       setBlueprint,
       skipBlueprint,
+      removeBlueprint,
       setApplyGst,
       setRoomDiscount,
       setQuoteDiscount,
@@ -259,6 +305,9 @@ export function DraftProvider({ children }: { children: ReactNode }) {
       removeRoom,
       moveRoom,
       setRoomLines,
+      setClient,
+      setValidUntil,
+      loadDraft,
       discard,
     }),
     [
@@ -267,6 +316,7 @@ export function DraftProvider({ children }: { children: ReactNode }) {
       blueprintUrl,
       setBlueprint,
       skipBlueprint,
+      removeBlueprint,
       setApplyGst,
       setRoomDiscount,
       setQuoteDiscount,
@@ -277,6 +327,9 @@ export function DraftProvider({ children }: { children: ReactNode }) {
       removeRoom,
       moveRoom,
       setRoomLines,
+      setClient,
+      setValidUntil,
+      loadDraft,
       discard,
     ],
   );

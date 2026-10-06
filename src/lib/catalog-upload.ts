@@ -10,8 +10,8 @@
  *   Decorative: S. No. | Company Name | Product Type | Watts | Decor type |
  *               Size | Decor mounting | Style | Date
  *
- * Optional extra columns on either tab: Price (or Rate / MRP), Code (or SKU /
- * Model), Name, Size, Cutout, Finish, Colour, Material, IP, Image (photo file
+ * Optional extra columns on either tab: Price (or Rate / MRP), Shahi Lites
+ * SKU, Code (or SKU / Model), Name, Size, Cutout, Finish, Colour, Material, IP, Image (photo file
  * names or direct https photo links, comma separated), Unit (nos / mtr).
  *
  * Photos are matched to rows by, in order: the Image column; a file named
@@ -85,6 +85,7 @@ const COLUMNS = {
   mounting: ["decormounting", "mounting"],
   style: ["style"],
   price: ["price", "rate", "mrp", "unitprice", "cost", "priceperproduct"],
+  slSku: ["shahilitessku", "slsku", "shahisku", "shahilitescode", "slcode"],
   code: ["code", "sku", "model", "modelno", "itemcode", "productcode", "itemno"],
   name: ["name", "productname"],
   cutout: ["cutout"],
@@ -242,6 +243,7 @@ export function parseCatalogWorkbook(sheets: SheetInput[], sourceName: string): 
         images: imageUrls,
         uploaded: true,
         company: company || null,
+        slSku: get("slSku") || null,
       };
 
       if (branch === "functional") {

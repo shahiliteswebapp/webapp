@@ -26,6 +26,7 @@ export async function GET(req: Request) {
     toStoreFilter(params, isSuperadmin ? undefined : session.email),
   );
 
+  // Grand totals are for the superadmin only.
   const csv = toCsv(
     [
       "Quotation Number",
@@ -33,8 +34,9 @@ export async function GET(req: Request) {
       "Generated Time",
       "Employee",
       "Email",
+      "Client",
       "Status",
-      "Grand Total (INR)",
+      ...(isSuperadmin ? ["Grand Total (INR)"] : []),
     ],
     rows.map((r) => [
       r.number,
@@ -42,8 +44,9 @@ export async function GET(req: Request) {
       fmtTime(r.createdAt),
       r.employeeName,
       r.employeeEmail,
+      r.clientName ?? "",
       STATUS_LABEL[r.status],
-      r.totalAmount.toFixed(2),
+      ...(isSuperadmin ? [r.totalAmount.toFixed(2)] : []),
     ]),
   );
 

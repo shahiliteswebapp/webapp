@@ -23,15 +23,20 @@ import {
   type DecorativeSystem,
   type FunctionalSystem,
   type InterfaceTag,
+  type LightingSystem,
+  skuOf,
 } from "@/lib/catalog";
 import {
   LAYER_OPTIONS,
   availableControls,
   availableInterfaces,
   decorativeTagOptions,
+  filterByRange,
   filterDecorative,
   filterFunctional,
+  rangeActive,
   type Branch,
+  type RangePicks,
   type DecorativePicks,
   type FunctionalPicks,
 } from "@/lib/lighting-filters";
@@ -98,6 +103,7 @@ export function LightingFilterPicker({
   const [fPicks, setFPicks] = useState<Partial<FunctionalPicks>>({});
   const [dPicks, setDPicks] = useState<Partial<DecorativePicks>>({});
   const [query, setQuery] = useState("");
+  const [range, setRange] = useState<RangePicks>({});
 
   const setEditing = (v: boolean) => {
     setEditingState(v);
@@ -195,8 +201,11 @@ export function LightingFilterPicker({
         />
       </div>
 
+      <RangeFields value={range} onChange={setRange} />
+
       {searching ? (
         <ResultList
+          range={range}
           candidates={searchResults}
           total={LIGHTING_SYSTEMS.length}
           onPick={(id) => (getSystem(id)?.kind === "functional" ? pickFunctional(id) : pickDecorative(id))}
@@ -231,6 +240,7 @@ export function LightingFilterPicker({
           picks={fPicks}
           setPicks={setFPicks}
           candidates={fCandidates}
+          range={range}
           onPick={pickFunctional}
           onPreview={onPreview}
         />
@@ -239,6 +249,7 @@ export function LightingFilterPicker({
           picks={dPicks}
           setPicks={setDPicks}
           candidates={dCandidates}
+          range={range}
           onPick={pickDecorative}
           onPreview={onPreview}
         />
@@ -265,9 +276,15 @@ function searchAll(query: string) {
   const compact = q.replace(/[\s-]+/g, "");
   const hits: { s: (typeof LIGHTING_SYSTEMS)[number]; rank: number }[] = [];
   for (const s of LIGHTING_SYSTEMS) {
-    const code = s.sourceCode.toLowerCase().replace(/[\s-]+/g, "");
+    const codes = [s.sourceCode, s.slSku ?? ""].map((c) => c.toLowerCase().replace(/[\s-]+/g, ""));
     const name = s.name.toLowerCase();
-    const rank = code.startsWith(compact) ? 0 : code.includes(compact) ? 1 : name.includes(q) ? 2 : -1;
+    const rank = codes.some((c) => c && c.startsWith(compact))
+      ? 0
+      : codes.some((c) => c && c.includes(compact))
+        ? 1
+        : name.includes(q)
+          ? 2
+          : -1;
     if (rank >= 0) hits.push({ s, rank });
   }
   return hits.sort((a, b) => a.rank - b.rank).map((h) => h.s);
@@ -279,12 +296,14 @@ function FunctionalFlow({
   picks,
   setPicks,
   candidates,
+  range,
   onPick,
   onPreview,
 }: {
   picks: Partial<FunctionalPicks>;
   setPicks: Dispatch<SetStateAction<Partial<FunctionalPicks>>>;
   candidates: FunctionalSystem[];
+  range: RangePicks;
   onPick: (id: string) => void;
   onPreview?: (id: string | null) => void;
 }) {
@@ -396,6 +415,7 @@ function FunctionalFlow({
       )}
 
       <ResultList
+        range={range}
         candidates={candidates}
         total={candidates.length}
         onPick={onPick}
@@ -412,12 +432,14 @@ function DecorativeFlow({
   picks,
   setPicks,
   candidates,
+  range,
   onPick,
   onPreview,
 }: {
   picks: Partial<DecorativePicks>;
   setPicks: Dispatch<SetStateAction<Partial<DecorativePicks>>>;
   candidates: DecorativeSystem[];
+  range: RangePicks;
   onPick: (id: string) => void;
   onPreview?: (id: string | null) => void;
 }) {
@@ -503,12 +525,96 @@ function DecorativeFlow({
       )}
 
       <ResultList
+        range={range}
         candidates={candidates}
         total={candidates.length}
         onPick={onPick}
         onPreview={onPreview}
         priceFor={(s) => s.unitCost}
       />
+    </div>
+  );
+}
+
+/* -------------------------------- Size and price -------------------------------- */
+
+function numOrUndef(v: string): number | undefined {
+  const n = parseFloat(v);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
+
+function RangeInput({
+  value,
+  onChange,
+  placeholder,
+  label,
+}: {
+  value?: number;
+  onChange: (v: number | undefined) => void;
+  placeholder: string;
+  label: string;
+}) {
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={0}
+      aria-label={label}
+      placeholder={placeholder}
+      value={value ?? ""}
+      onChange={(e) => onChange(numOrUndef(e.target.value))}
+      className="w-0 min-w-0 flex-1 rounded-md border border-hairline bg-paper px-2 py-1.5 text-sm outline-none focus:border-gold"
+    />
+  );
+}
+
+/** Min / max price (rupees) and size (width in mm). Applies to every list. */
+function RangeFields({ value, onChange }: { value: RangePicks; onChange: (r: RangePicks) => void }) {
+  const [open, setOpen] = useState(rangeActive(value));
+  const set = (k: keyof RangePicks) => (v: number | undefined) => onChange({ ...value, [k]: v });
+  const active = rangeActive(value);
+  return (
+    <div className="rounded-md border border-hairline bg-paper">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left text-xs"
+      >
+        <span className="font-medium text-ink">
+          Size &amp; price
+          {active && <span className="ml-1.5 rounded-full bg-gold px-1.5 py-0.5 text-[10px] text-paper">on</span>}
+        </span>
+        <span className="text-gold-deep">{open ? "Hide" : "Filter"}</span>
+      </button>
+      {open && (
+        <div className="space-y-2 border-t border-hairline p-2.5">
+          <div className="flex items-center gap-2">
+            <span className="w-16 shrink-0 text-xs text-muted">Price ₹</span>
+            <RangeInput label="Lowest price" placeholder="Min" value={value.priceMin} onChange={set("priceMin")} />
+            <span className="text-faint">to</span>
+            <RangeInput label="Highest price" placeholder="Max" value={value.priceMax} onChange={set("priceMax")} />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-16 shrink-0 text-xs text-muted">Size mm</span>
+            <RangeInput label="Smallest size in mm" placeholder="Min" value={value.sizeMin} onChange={set("sizeMin")} />
+            <span className="text-faint">to</span>
+            <RangeInput label="Largest size in mm" placeholder="Max" value={value.sizeMax} onChange={set("sizeMax")} />
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] text-faint">Size is the width or diameter.</p>
+            {active && (
+              <button
+                type="button"
+                onClick={() => onChange({})}
+                className="text-[11px] font-medium text-gold-deep hover:underline"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -539,8 +645,9 @@ function Thumb({ id }: { id: string }) {
 
 const MAX_RESULTS = 300;
 
-function ResultList<T extends { id: string; name: string; unit: string; sourceCode: string }>({
-  candidates,
+function ResultList<T extends LightingSystem>({
+  candidates: unfiltered,
+  range,
   total,
   onPick,
   onPreview,
@@ -548,12 +655,16 @@ function ResultList<T extends { id: string; name: string; unit: string; sourceCo
   heading = "Matches",
 }: {
   candidates: T[];
+  range: RangePicks;
   total: number;
   onPick: (id: string) => void;
   onPreview?: (id: string | null) => void;
   priceFor: (s: T) => number;
   heading?: string;
 }) {
+  // priceFor only changes along with the candidate list (new filter picks).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const candidates = useMemo(() => filterByRange(unfiltered, range, priceFor), [unfiltered, range]);
   const shown = candidates.slice(0, MAX_RESULTS);
   const fine = useFinePointer();
   const listRef = useRef<HTMLUListElement>(null);
@@ -632,7 +743,9 @@ function ResultList<T extends { id: string; name: string; unit: string; sourceCo
                   <Thumb id={s.id} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-ink">{s.name}</span>
-                    <span className="block truncate text-[11px] text-faint">{s.sourceCode}</span>
+                    <span className="block truncate text-[11px] text-faint">
+                      {[skuOf(s), s.size].filter(Boolean).join(" · ")}
+                    </span>
                   </span>
                   <span className="shrink-0 tabular-nums text-faint">
                     {price > 0 ? money(price) : "No price"}

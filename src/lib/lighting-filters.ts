@@ -19,6 +19,7 @@
  * record yet, so that pick is accepted but doesn't remove candidates.
  */
 
+import { sizeMm } from "./catalog";
 import type {
   ControlMode,
   DecorativeSystem,
@@ -148,3 +149,47 @@ export function availableInterfaces(
 }
 
 export const LAYER_OPTIONS: Layer[] = [1, 2, 3, 4, 5, 6];
+
+/* ------------------------------ size and price ------------------------------ */
+
+/** Optional bounds; any unset side is open. Size is the width in mm (see sizeMm). */
+export interface RangePicks {
+  priceMin?: number;
+  priceMax?: number;
+  sizeMin?: number;
+  sizeMax?: number;
+}
+
+export function rangeActive(r: RangePicks): boolean {
+  return [r.priceMin, r.priceMax, r.sizeMin, r.sizeMax].some((v) => v !== undefined);
+}
+
+/**
+ * Keep the systems inside the size and price bounds. `priceOf` gives the
+ * price shown in the list (it can depend on the chosen variant). Items with
+ * no price, or no known size, drop out once that bound is set.
+ */
+export function filterByRange<T extends LightingSystem>(
+  systems: T[],
+  r: RangePicks,
+  priceOf: (s: T) => number,
+): T[] {
+  if (!rangeActive(r)) return systems;
+  const priced = r.priceMin !== undefined || r.priceMax !== undefined;
+  const sized = r.sizeMin !== undefined || r.sizeMax !== undefined;
+  return systems.filter((s) => {
+    if (priced) {
+      const p = priceOf(s);
+      if (!(p > 0)) return false;
+      if (r.priceMin !== undefined && p < r.priceMin) return false;
+      if (r.priceMax !== undefined && p > r.priceMax) return false;
+    }
+    if (sized) {
+      const mm = sizeMm(s);
+      if (mm === null) return false;
+      if (r.sizeMin !== undefined && mm < r.sizeMin) return false;
+      if (r.sizeMax !== undefined && mm > r.sizeMax) return false;
+    }
+    return true;
+  });
+}

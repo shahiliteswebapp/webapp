@@ -8,8 +8,9 @@ import {
   renderToBuffer,
 } from "@react-pdf/renderer";
 import { COMPANY, QUOTE, disclaimer } from "@/lib/config";
-import { addDays, fmtDate, fmtDateTime } from "@/lib/format";
+import { addDays, daysUntil, fmtDateTime, fmtYmd, ymd } from "@/lib/format";
 import type { ComputedLine, ComputedQuote, ComputedRoom } from "@/lib/quote";
+import type { ClientDetails } from "@/lib/types";
 import { registerPdfFonts } from "./fonts";
 
 const inr = new Intl.NumberFormat("en-IN", {
@@ -187,6 +188,22 @@ const s = StyleSheet.create({
     ...NO_LIGA,
   },
   lightMeta: { fontSize: 8, color: MUTED, ...NO_LIGA },
+  lightSpec: { fontSize: 7.5, color: INK, marginBottom: 2, ...NO_LIGA },
+  clientBox: {
+    marginTop: 14,
+    borderLeftWidth: 2,
+    borderLeftColor: GOLD,
+    paddingLeft: 10,
+    paddingVertical: 2,
+  },
+  clientName: {
+    fontFamily: "Cormorant Garamond",
+    fontSize: 16,
+    color: "#0b0b0b",
+    lineHeight: 1.15,
+    marginBottom: 2,
+    ...NO_LIGA,
+  },
   lightAmt: { width: 90, textAlign: "right", fontSize: 10, ...NO_LIGA },
   optRow: {
     borderBottomWidth: 1,
@@ -313,12 +330,11 @@ function Watermark() {
   );
 }
 
-function Footer() {
+function Footer({ number }: { number: string }) {
   return (
     <View style={s.footer} fixed>
       <Text>
-        {COMPANY.legalName} · This PDF is the recipient&apos;s only copy. No
-        copy is retained.
+        {COMPANY.legalName} · Quotation {number} · {COMPANY.phones.join(" · ")}
       </Text>
       <Text
         render={({ pageNumber, totalPages }) =>
@@ -329,13 +345,21 @@ function Footer() {
   );
 }
 
-function SlimHead({ number }: { number: string }) {
+function SlimHead({ number, validUntil }: { number: string; validUntil: string }) {
   return (
     <View style={s.slimHead} fixed>
       <Text style={s.slimBrand}>SHAHI LITES</Text>
-      <Text style={{ fontSize: 8, color: MUTED }}>Quotation {number}</Text>
+      <Text style={{ fontSize: 8, color: MUTED }}>
+        Quotation {number} · Valid until {validUntil}
+      </Text>
     </View>
   );
+}
+
+/** "SKU GCL-110 · Size D90MM X H70MM" */
+function Spec({ line }: { line: Pick<ComputedLine, "sku" | "dimensions"> }) {
+  const parts = [line.sku ? `SKU ${line.sku}` : "", line.dimensions ? `Size ${line.dimensions}` : ""].filter(Boolean);
+  return parts.length ? <Text style={s.lightSpec}>{parts.join("  ·  ")}</Text> : null;
 }
 
 /* ------------------------------ room lights ------------------------------ */
@@ -370,6 +394,7 @@ function SingleOptionLights({ room, photos }: { room: ComputedRoom; photos: Reco
           <View style={{ flexGrow: 1, flexShrink: 1, paddingLeft: 14 }}>
             <Text style={s.lightIndex}>LIGHT {i + 1}</Text>
             <Text style={s.lightName}>{l.name}</Text>
+            <Spec line={l} />
             <Text style={s.lightMeta}>
               {l.qty} {l.unitLabel} × {rs(l.unitCost)}
               {l.discount > 0 ? `  ·  Discount ${l.discountLabel} (−${rs(l.discount)})` : ""}
@@ -412,6 +437,7 @@ function MultiOptionLights({ rooms, photos }: { rooms: ComputedRoom[]; photos: R
                       <Photo src={c.image ? photos[c.image] : undefined} size={photoSize} />
                       <Text style={s.optName}>{c.name}</Text>
                       {c.inherited && <Text style={s.optNote}>Same as Option 1</Text>}
+                      <Spec line={c} />
                       <Text style={s.lightMeta}>
                         {c.qty} {c.unitLabel} × {rs(c.unitCost)}
                       </Text>
@@ -525,6 +551,12 @@ interface RenderArgs {
   blueprintName?: string;
   /** product photo URL -> JPEG data URI (see product-images.ts) */
   photos?: Record<string, string>;
+  /** who the quotation is for */
+  client?: ClientDetails;
+  /** last valid day, YYYY-MM-DD (IST); unset = 60 days from generation */
+  validUntil?: string;
+  /** 1 for the first version; shown from 2 on */
+  revision?: number;
 }
 
 function QuotationDoc({
@@ -535,10 +567,15 @@ function QuotationDoc({
   blueprintDataUrl,
   blueprintName,
   photos = {},
+  client,
+  validUntil: validUntilYmd,
+  revision = 1,
 }: RenderArgs) {
   const quote = options[0];
   const multi = options.length > 1;
-  const validUntil = fmtDate(addDays(createdAtISO, QUOTE.validityDays));
+  const untilYmd = validUntilYmd ?? ymd(addDays(createdAtISO, QUOTE.validityDays));
+  const validUntil = fmtYmd(untilYmd);
+  const validDays = daysUntil(untilYmd, new Date(createdAtISO));
   const roomsWithLighting = quote.rooms.filter((_, i) =>
     options.some((q) => q.rooms[i].lines.length > 0),
   ).length;
@@ -570,10 +607,26 @@ function QuotationDoc({
         <Text style={s.eyebrow}>Lighting Quotation</Text>
         <Text style={s.h1}>Cost Estimate</Text>
 
+        {client?.name ? (
+          <View style={s.clientBox}>
+            <Text style={s.metaLabel}>Prepared for</Text>
+            <Text style={s.clientName}>{client.name}</Text>
+            {client.address ? <Text style={s.lightMeta}>{client.address}</Text> : null}
+            {client.phone || client.email ? (
+              <Text style={s.lightMeta}>
+                {[client.phone, client.email].filter(Boolean).join("  ·  ")}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+
         <View style={s.metaGrid}>
           <View style={s.metaCell}>
             <Text style={s.metaLabel}>Quotation No.</Text>
-            <Text style={s.metaValue}>{number}</Text>
+            <Text style={s.metaValue}>
+              {number}
+              {revision > 1 ? `  (revision ${revision})` : ""}
+            </Text>
           </View>
           <View style={s.metaCell}>
             <Text style={s.metaLabel}>Generated</Text>
@@ -586,7 +639,7 @@ function QuotationDoc({
           <View style={s.metaCell}>
             <Text style={s.metaLabel}>Valid until</Text>
             <Text style={s.metaValue}>
-              {validUntil} ({QUOTE.validityDays} days)
+              {validUntil} ({validDays} day{validDays === 1 ? "" : "s"})
             </Text>
           </View>
           <View style={s.metaCell}>
@@ -610,10 +663,10 @@ function QuotationDoc({
         ) : null}
 
         <View style={s.disclaimer}>
-          <Text>{disclaimer(quote.applyGst)}</Text>
+          <Text>{disclaimer(quote.applyGst, validUntil)}</Text>
         </View>
 
-        <Footer />
+        <Footer number={number} />
       </Page>
 
       {/* One page (or more) per room */}
@@ -622,7 +675,7 @@ function QuotationDoc({
         return (
           <Page size="A4" style={s.page} key={room.roomId}>
             <Watermark />
-            <SlimHead number={number} />
+            <SlimHead number={number} validUntil={validUntil} />
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
               <View style={{ flexShrink: 1, paddingRight: 12 }}>
                 <Text style={s.roomIndex}>
@@ -642,7 +695,7 @@ function QuotationDoc({
             )}
             <Accessories rooms={perOption} />
             <RoomTotals rooms={perOption} />
-            <Footer />
+            <Footer number={number} />
           </Page>
         );
       })}
@@ -650,7 +703,7 @@ function QuotationDoc({
       {/* Totals */}
       <Page size="A4" style={s.page}>
         <Watermark />
-        <SlimHead number={number} />
+        <SlimHead number={number} validUntil={validUntil} />
         <Text style={s.eyebrow}>Summary</Text>
         <Text style={s.h1}>Total Cost Estimate</Text>
 
@@ -727,10 +780,10 @@ function QuotationDoc({
         </View>
 
         <View style={s.disclaimer}>
-          <Text>{disclaimer(quote.applyGst)}</Text>
+          <Text>{disclaimer(quote.applyGst, validUntil)}</Text>
         </View>
 
-        <Footer />
+        <Footer number={number} />
       </Page>
     </Document>
   );

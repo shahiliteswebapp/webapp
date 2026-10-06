@@ -34,9 +34,23 @@ function ReviewCard({ q }: { q: QuotationRecord }) {
         </div>
       </div>
 
-      <p className="mt-3 text-xs text-faint">
-        Review the PDF in your inbox, then decide here.
-      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+        <a
+          href={`/api/quotations/${encodeURIComponent(q.number)}/pdf`}
+          target="_blank"
+          rel="noopener"
+          className="inline-flex h-8 items-center rounded-full border border-hairline px-3 font-medium text-ink hover:border-gold hover:bg-gold-tint"
+        >
+          Open PDF
+        </a>
+        <a
+          href={`/new/edit/${encodeURIComponent(q.number)}`}
+          className="inline-flex h-8 items-center rounded-full border border-hairline px-3 font-medium text-ink hover:border-gold hover:bg-gold-tint"
+        >
+          Edit
+        </a>
+        {q.clientName && <span className="text-muted">For {q.clientName}</span>}
+      </div>
 
       <textarea
         name="note"

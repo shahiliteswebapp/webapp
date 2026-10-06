@@ -44,6 +44,7 @@ next-env.d.ts
 # local JSON store + generated PDFs / quotations (never committed)
 /data/*.json
 /data/catalog-uploads/
+/data/quotes/
 /output/*.pdf
 /SL-*.pdf
 .env.local.*

@@ -39,14 +39,15 @@ export const EMAIL = {
   senderEmail: "shahiliteswebapp@gmail.com",
 } as const;
 
-export function disclaimer(applyGst = true): string {
+export function disclaimer(applyGst = true, validUntil?: string): string {
   return (
-    "This PDF is the only copy of this quotation. Shahi Lites does not store or retain " +
-    "this document or its line items. Please keep this file safe, as it cannot be " +
-    "reissued or reconstructed. All amounts are in Indian Rupees (INR); " +
+    "All amounts are in Indian Rupees (INR); " +
     (applyGst ? "GST is charged at 18% as shown. " : "GST is not included. ") +
-    "This quotation is valid for 2 months (60 days) from the date and time of generation " +
-    "(India Standard Time)."
+    (validUntil
+      ? `This quotation is valid until ${validUntil} (India Standard Time). `
+      : "This quotation is valid for 2 months (60 days) from the date and time of generation " +
+        "(India Standard Time). ") +
+    "Prices, availability and dimensions are subject to confirmation at the time of order."
   );
 }
 

@@ -82,6 +82,37 @@ export function fmtDateTime(iso: string | Date): string {
   return Number.isNaN(d.getTime()) ? "-" : `${DATETIME.format(d)} IST`;
 }
 
+/*
+ * Quotation validity: an IST calendar date (YYYY-MM-DD). Defaults to 60 days
+ * after generation; the employee can pick any date from today up to a year out.
+ */
+export const MAX_VALIDITY_DAYS = 366;
+
+export function defaultValidUntil(from: Date = new Date(), days = 60): string {
+  return ymd(addDays(from, days));
+}
+
+export function isValidValidUntil(v: unknown, now: Date = new Date()): v is string {
+  return (
+    typeof v === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(v) &&
+    v >= ymd(now) &&
+    v <= ymd(addDays(now, MAX_VALIDITY_DAYS))
+  );
+}
+
+/** "06 Dec 2026" for a YYYY-MM-DD validity date. */
+export function fmtYmd(v: string): string {
+  return fmtDate(new Date(`${v}T12:00:00+05:30`));
+}
+
+/** Whole days from today (IST) to a YYYY-MM-DD date. */
+export function daysUntil(v: string, now: Date = new Date()): number {
+  const a = Date.parse(`${ymd(now)}T00:00:00Z`);
+  const b = Date.parse(`${v}T00:00:00Z`);
+  return Math.round((b - a) / 86_400_000);
+}
+
 export function addDays(iso: string | Date, days: number): Date {
   const d = typeof iso === "string" ? new Date(iso) : new Date(iso.getTime());
   d.setDate(d.getDate() + days);

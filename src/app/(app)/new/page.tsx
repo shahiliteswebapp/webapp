@@ -12,7 +12,7 @@ import { draftStarted } from "@/lib/types";
 
 export default function BlueprintUploadPage() {
   const router = useRouter();
-  const { loaded, draft, setBlueprint, skipBlueprint, discard } = useDraft();
+  const { loaded, draft, setBlueprint, skipBlueprint, removeBlueprint, discard } = useDraft();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,17 +64,33 @@ export default function BlueprintUploadPage() {
     <div className="space-y-6">
       <div className="border-b border-hairline pb-4">
         <Eyebrow>Start New</Eyebrow>
-        <h1 className="font-display text-4xl text-ink-deep">New quotation</h1>
+        <h1 className="font-display text-4xl text-ink-deep">
+          {draft?.editOf ? `Edit ${draft.editOf}` : "New quotation"}
+        </h1>
         <div className="mt-4">
           <WizardSteps current={1} />
         </div>
       </div>
 
+      <input
+        ref={inputRef}
+        type="file"
+        accept="application/pdf,image/png"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void handleFile(file);
+          e.target.value = "";
+        }}
+      />
+
       {!loaded ? (
         <div className="h-48 animate-pulse rounded-[var(--radius-card)] bg-panel" />
       ) : draftStarted(draft) ? (
         <Card className="space-y-4">
-          <Eyebrow>Resume where you left off</Eyebrow>
+          <Eyebrow>
+            {draft.editOf ? `Editing ${draft.editOf}` : "Resume where you left off"}
+          </Eyebrow>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="font-display text-2xl text-ink-deep">
@@ -92,7 +108,19 @@ export default function BlueprintUploadPage() {
                 {draft.rooms.length === 1 ? "" : "s"} so far
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                disabled={busy}
+                onClick={() => inputRef.current?.click()}
+              >
+                {busy ? "Reading…" : draft.blueprint ? "Change blueprint" : "Add a blueprint"}
+              </Button>
+              {draft.blueprint && (
+                <Button variant="ghost" disabled={busy} onClick={removeBlueprint}>
+                  Remove blueprint
+                </Button>
+              )}
               <Button
                 variant="secondary"
                 onClick={async () => {
@@ -100,14 +128,19 @@ export default function BlueprintUploadPage() {
                   setError(null);
                 }}
               >
-                Discard & start over
+                {draft.editOf ? "Stop editing & start new" : "Discard & start over"}
               </Button>
               <ButtonLink href="/new/rooms">Continue</ButtonLink>
             </div>
           </div>
+          {error && (
+            <p className="rounded-md border border-rejected/30 bg-rejected/5 px-3 py-2 text-xs text-rejected">
+              {error}
+            </p>
+          )}
           <p className="text-xs text-faint">
-            This draft is saved only in this browser, on this device. It is
-            cleared once you send the quotation.
+            Changing the blueprint keeps every room and light. The draft lives
+            in this browser until you generate the PDF, which saves it.
           </p>
         </Card>
       ) : (
@@ -158,17 +191,6 @@ export default function BlueprintUploadPage() {
             >
               {busy ? "Reading…" : "Choose file"}
             </Button>
-            <input
-              ref={inputRef}
-              type="file"
-              accept="application/pdf,image/png"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleFile(file);
-                e.target.value = "";
-              }}
-            />
           </div>
 
           {warn && (
@@ -197,8 +219,8 @@ export default function BlueprintUploadPage() {
             </Button>
           </div>
           <p className="text-xs text-faint">
-            The blueprint stays on your device. It is never uploaded to a
-            server or stored by Shahi Lites.
+            The blueprint is saved with the quotation when you generate the
+            PDF, so it shows again when the quotation is edited.
           </p>
         </div>
       )}

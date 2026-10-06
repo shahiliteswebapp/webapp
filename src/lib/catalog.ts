@@ -83,6 +83,8 @@ interface BaseSystem {
   uploaded?: boolean;
   /** brand, from the upload sheet's "Company Name" column */
   company?: string | null;
+  /** Shahi Lites' own product code, when one is set (see skuOf) */
+  slSku?: string | null;
 }
 
 export interface FunctionalSystem extends BaseSystem {
@@ -268,6 +270,45 @@ export function variantLabel(pick: { interfaceTag?: InterfaceTag; control?: Cont
   }
   if (pick.control) parts.push(pick.control === "tunable" ? "Dimmable + Tunable" : "Dimmable");
   return parts.join(" ");
+}
+
+/**
+ * The code printed on quotations as the SKU: Shahi Lites' own code when a
+ * superadmin has set one, else the catalogue code.
+ */
+export function skuOf(sys: LightingSystem): string {
+  return (sys.slSku || sys.sourceCode || "").trim();
+}
+
+/** Dimensions as shown to clients, e.g. "D90MM X H70MM · cut-out 60MM". */
+export function dimensionsOf(sys: LightingSystem): string {
+  const parts: string[] = [];
+  if (sys.size) parts.push(sys.size.replace(/\s+/g, " ").trim());
+  if (sys.kind === "functional" && sys.cutout) parts.push(`cut-out ${sys.cutout}`);
+  return parts.join(" · ");
+}
+
+/*
+ * Width of a product in mm, for the size filter: the largest diameter /
+ * width / length in its size text ("D90MM X H70MM" -> 90). Heights only
+ * count when nothing else is given. Null when the size is unknown.
+ */
+export function sizeMm(sys: LightingSystem): number | null {
+  const text = (sys.size ?? "").toUpperCase();
+  if (!text) return null;
+  const across: number[] = [];
+  const tall: number[] = [];
+  // "D300,420,500,600MM" lists several sizes: the first one counts.
+  for (const m of text.matchAll(/(FH|[DWLH])?\s*(\d+(?:\.\d+)?)(?:\s*,\s*\d+(?:\.\d+)?)*\s*(MM|CM|M)?/g)) {
+    let n = Number(m[2]);
+    if (!Number.isFinite(n) || n <= 0) continue;
+    if (m[3] === "CM") n *= 10;
+    else if (m[3] === "M") n *= 1000;
+    if (m[1] === "H" || m[1] === "FH") tall.push(n);
+    else across.push(n);
+  }
+  const pool = across.length ? across : tall;
+  return pool.length ? Math.max(...pool) : null;
 }
 
 export const UNIT_LABEL: Record<Unit, string> = { nos: "nos", mtr: "m" };

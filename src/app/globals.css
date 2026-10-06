@@ -98,3 +98,22 @@ p, li, dt, dd, td, th {
   border-radius: 999px;
   border: 2px solid var(--color-panel);
 }
+
+/*
+ * Phones: 16px text in form fields, so iOS Safari does not zoom the page in
+ * every time a field gets focus, and no double-tap zoom delay on controls.
+ */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  a,
+  button,
+  input,
+  select,
+  label {
+    touch-action: manipulation;
+  }
+}

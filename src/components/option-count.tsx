@@ -33,7 +33,7 @@ export function OptionCountControl({
             aria-checked={value === n}
             onClick={() => onChange(n)}
             className={cx(
-              "h-7 w-8 text-xs font-medium transition-colors",
+              "h-7 w-8 text-xs font-medium transition-colors pointer-coarse:h-9 pointer-coarse:w-10",
               n > 1 && "border-l border-hairline",
               value === n ? "bg-gold text-paper" : "bg-paper text-muted hover:bg-panel",
             )}

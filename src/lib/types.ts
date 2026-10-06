@@ -19,8 +19,9 @@ export const STATUS_LABEL: Record<QuotationStatus, string> = {
 };
 
 /*
- * The ONLY thing persisted server-side. No blueprint, no rooms, no line items —
- * just the ledger entry for a quotation that was generated.
+ * The ledger entry for a quotation. The PDF and the editable contents
+ * (rooms, lights, client details, blueprint) are saved beside it by
+ * src/lib/quote-files.ts, so a quotation can be reopened and edited.
  */
 export interface QuotationRecord {
   id: string;
@@ -33,6 +34,23 @@ export interface QuotationRecord {
   reviewedBy?: string; // reviewer email
   reviewedAt?: string; // ISO timestamp
   reviewNote?: string;
+  /** client the quotation is for (from the client details form) */
+  clientName?: string;
+  /** ISO timestamp of the last edit; unset until the first edit */
+  updatedAt?: string;
+  /** 1 for the first version, +1 per edit */
+  revision?: number;
+}
+
+/** Who may reopen and edit a quotation: the superadmin always, an employee only their own. */
+export function canEditQuotation(
+  session: { email: string; role: Role },
+  record: Pick<QuotationRecord, "employeeEmail">,
+): boolean {
+  return (
+    session.role === "superadmin" ||
+    record.employeeEmail.toLowerCase() === session.email.toLowerCase()
+  );
 }
 
 /* ---- access control: who may sign in at all ---- */
@@ -78,9 +96,27 @@ export interface CreateQuotationInput {
   totalAmount: number;
   /** "downloaded" (no review requested) or "submitted_for_review" */
   status: Extract<QuotationStatus, "downloaded" | "submitted_for_review">;
+  clientName?: string;
 }
 
-/* ---- In-browser wizard draft (never leaves the device until "send") ---- */
+export interface UpdateQuotationInput {
+  totalAmount: number;
+  status: Extract<QuotationStatus, "downloaded" | "submitted_for_review">;
+  clientName?: string;
+  actorEmail: string;
+}
+
+/* ---- client details, typed in just before the PDF is generated ---- */
+
+export interface ClientDetails {
+  name: string;
+  phone?: string;
+  email?: string;
+  /** site / delivery address */
+  address?: string;
+}
+
+/* ---- In-browser wizard draft (sent to the server when the PDF is generated) ---- */
 
 export interface DraftBlueprint {
   name: string;
@@ -149,6 +185,12 @@ export interface QuoteDraft {
   discount?: Discount;
   /** how many options (1 to MAX_OPTIONS) the quotation offers; default 1 */
   optionCount?: number;
+  /** who the quotation is for */
+  client?: ClientDetails;
+  /** last valid day, IST, YYYY-MM-DD; unset = 60 days from generation */
+  validUntil?: string;
+  /** set when this draft is an edit of a saved quotation (its number) */
+  editOf?: string;
   rooms: DraftRoom[];
 }
 

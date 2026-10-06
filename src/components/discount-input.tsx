@@ -45,7 +45,7 @@ export function DiscountInput({
           value={value && value.value > 0 ? value.value : ""}
           placeholder="0"
           onChange={(e) => set(kind, e.target.value)}
-          className="w-16 bg-transparent px-2 py-1 text-sm text-ink outline-none"
+          className="w-16 bg-transparent px-2 py-1 text-sm text-ink outline-none pointer-coarse:py-2"
         />
         {(["pct", "amt"] as const).map((k) => (
           <button
@@ -55,7 +55,7 @@ export function DiscountInput({
             onClick={() => onChange(value && value.value > 0 ? { kind: k, value: value.value } : { kind: k, value: 0 })}
             aria-pressed={kind === k}
             className={cx(
-              "border-l border-hairline px-2 text-xs font-medium",
+              "border-l border-hairline px-2 text-xs font-medium pointer-coarse:px-3",
               kind === k ? "bg-gold text-paper" : "text-muted hover:bg-panel",
             )}
           >

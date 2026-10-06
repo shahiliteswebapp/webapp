@@ -14,7 +14,7 @@ const PHOTO_MAX_PX = 1200;
 const CONCURRENCY = 4;
 
 /** Downscale to <= 1200px and re-encode as webp, so uploads stay small. */
-async function toWebp(file: File): Promise<Blob> {
+export async function toWebp(file: File): Promise<Blob> {
   const bmp = await createImageBitmap(file);
   const scale = Math.min(1, PHOTO_MAX_PX / Math.max(bmp.width, bmp.height));
   const canvas = document.createElement("canvas");
@@ -31,7 +31,7 @@ async function toWebp(file: File): Promise<Blob> {
   return blob;
 }
 
-async function uploadPhoto(file: File): Promise<string> {
+export async function uploadPhoto(file: File): Promise<string> {
   const blob = await toWebp(file);
   const fd = new FormData();
   fd.append("file", blob, file.name);

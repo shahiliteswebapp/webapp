@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, ButtonLink, Card, Eyebrow } from "@/components/ui";
 import { COMPANY, disclaimer } from "@/lib/config";
+import { fmtYmd } from "@/lib/format";
 
 function base64ToBlob(b64: string, type = "application/pdf"): Blob {
   const bin = atob(b64);
@@ -20,6 +21,8 @@ function SentInner() {
   const saved = params.get("saved");
   const emailError = params.get("emailError");
   const applyGst = params.get("gst") !== "0";
+  const rev = params.get("rev");
+  const valid = params.get("valid");
   const forReview = status === "submitted_for_review";
 
   const [pdf, setPdf] = useState<string | null>(null);
@@ -65,7 +68,7 @@ function SentInner() {
           </svg>
         </div>
         <p className="eyebrow mt-4">
-          {forReview ? "Submitted for review" : "Quotation generated"}
+          {rev ? `Edited, revision ${rev}` : forReview ? "Submitted for review" : "Quotation generated"}
         </p>
         <h1 className="mt-1 font-display text-4xl text-ink-deep">{number}</h1>
       </div>
@@ -91,21 +94,22 @@ function SentInner() {
               <li className="text-rejected">{emailError}</li>
             ) : transport === "smtp" ? (
               <li>The PDF was emailed to the reviewer, and a copy to you.</li>
-            ) : saved ? (
-              <li>
-                Email is not set up yet. A copy is at{" "}
-                <code className="rounded bg-panel px-1">{saved}</code> on the
-                server, and you can download it below.
-              </li>
             ) : (
-              <li>
-                Email is not set up yet. Download the PDF below and keep it
-                safe.
-              </li>
+              <li>Email is not set up yet. Download the PDF below.</li>
             ))}
+          {saved ? (
+            <li>
+              The PDF and its rooms and lights are saved. Open it from History
+              any time to view or edit it.
+            </li>
+          ) : (
+            <li className="text-rejected">
+              The quotation could not be saved for editing on this server. Download the PDF below.
+            </li>
+          )}
         </ul>
 
-        {pdf && (
+        {pdf ? (
           <Button onClick={download} variant="secondary" className="w-full">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
               <path
@@ -118,10 +122,17 @@ function SentInner() {
             </svg>
             Download {number}.pdf
           </Button>
-        )}
+        ) : saved ? (
+          <a
+            href={`/api/quotations/${encodeURIComponent(number)}/pdf?download=1`}
+            className="inline-flex h-10 w-full items-center justify-center rounded-full border border-hairline bg-paper px-5 text-sm font-medium text-ink hover:border-gold hover:bg-gold-tint"
+          >
+            Download {number}.pdf
+          </a>
+        ) : null}
 
         <p className="rounded-md border border-gold/40 bg-gold-tint px-3 py-2 text-xs text-ink-deep">
-          {disclaimer(applyGst)}
+          {disclaimer(applyGst, valid && /^\d{4}-\d{2}-\d{2}$/.test(valid) ? fmtYmd(valid) : undefined)}
         </p>
       </Card>
 

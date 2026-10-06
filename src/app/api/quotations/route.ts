@@ -1,14 +1,14 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { computeOptions } from "@/lib/quote";
-import { createQuotation } from "@/lib/store";
+import { createQuotation, getQuotation, updateQuotation } from "@/lib/store";
+import { saveQuoteFiles } from "@/lib/quote-files";
+import { defaultValidUntil, isValidValidUntil } from "@/lib/format";
 import { sendQuotationEmail } from "@/lib/email";
 import { renderQuotationPdf } from "@/lib/pdf/quotation-pdf";
 import { productPhotosForPdf } from "@/lib/pdf/product-images";
 import { loadCatalogChanges } from "@/lib/catalog-store";
-import type { Discount, DraftRoom } from "@/lib/types";
+import { canEditQuotation, type ClientDetails, type Discount, type DraftRoom } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +27,30 @@ interface Body {
   discount?: Discount;
   /** how many options (1 to 3); alternative lights ride on `rooms` */
   optionCount?: number;
+  /** who the quotation is for (name required) */
+  client?: ClientDetails;
+  /** last valid day, YYYY-MM-DD (IST); unset = 60 days */
+  validUntil?: string;
+  /** set when saving an edit of an existing quotation */
+  editOf?: string;
+  /** larger blueprint preview, saved so the quotation can be reopened */
+  blueprintSaveDataUrl?: string;
+  blueprintMeta?: { kind: "pdf" | "png"; width: number; height: number; pageCount: number };
+  noBlueprint?: boolean;
+}
+
+const str = (v: unknown, max = 300) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
+function cleanClient(c: unknown): ClientDetails | null {
+  const o = (c ?? {}) as Record<string, unknown>;
+  const name = str(o.name, 120);
+  if (!name) return null;
+  return {
+    name,
+    phone: str(o.phone, 40) || undefined,
+    email: str(o.email, 120) || undefined,
+    address: str(o.address, 300) || undefined,
+  };
 }
 
 export async function POST(req: Request) {
@@ -45,6 +69,24 @@ export async function POST(req: Request) {
   const rooms = Array.isArray(body.rooms) ? body.rooms : [];
   if (rooms.length === 0) {
     return NextResponse.json({ error: "No rooms to quote." }, { status: 400 });
+  }
+  const client = cleanClient(body.client);
+  if (!client) {
+    return NextResponse.json({ error: "Enter the client's name first." }, { status: 400 });
+  }
+
+  // Editing: the quotation must exist, and this person must be allowed to edit it.
+  const existing = body.editOf ? await getQuotation(body.editOf) : null;
+  if (body.editOf) {
+    if (!existing) {
+      return NextResponse.json({ error: "That quotation no longer exists." }, { status: 404 });
+    }
+    if (!canEditQuotation(session, existing)) {
+      return NextResponse.json(
+        { error: "You can only edit quotations you made." },
+        { status: 403 },
+      );
+    }
   }
 
   // Uploaded catalogue items must be known before pricing.
@@ -74,15 +116,35 @@ export async function POST(req: Request) {
     );
   }
 
+  if (body.validUntil !== undefined && body.validUntil !== "" && !isValidValidUntil(body.validUntil)) {
+    return NextResponse.json(
+      { error: "Pick a valid-until date between today and one year from now." },
+      { status: 400 },
+    );
+  }
+  const validUntil = isValidValidUntil(body.validUntil) ? body.validUntil : defaultValidUntil();
+
   const forReview = body.action !== "download";
 
   // The ledger keeps one amount: Option 1's grand total.
-  const record = await createQuotation({
-    employeeName: session.name,
-    employeeEmail: session.email,
-    totalAmount: quote.grandTotal,
-    status: forReview ? "submitted_for_review" : "downloaded",
-  });
+  const status = forReview ? "submitted_for_review" : "downloaded";
+  const record = existing
+    ? await updateQuotation(existing.id, {
+        totalAmount: quote.grandTotal,
+        status,
+        clientName: client.name,
+        actorEmail: session.email,
+      })
+    : await createQuotation({
+        employeeName: session.name,
+        employeeEmail: session.email,
+        totalAmount: quote.grandTotal,
+        status,
+        clientName: client.name,
+      });
+  if (!record) {
+    return NextResponse.json({ error: "Could not save the quotation." }, { status: 500 });
+  }
 
   let pdf: Buffer;
   try {
@@ -92,8 +154,12 @@ export async function POST(req: Request) {
     pdf = await renderQuotationPdf({
       photos,
       number: record.number,
-      createdAtISO: record.createdAt,
-      employeeName: session.name,
+      createdAtISO: record.updatedAt ?? record.createdAt,
+      // An edit keeps the original author's name on the quotation.
+      employeeName: record.employeeName,
+      client,
+      validUntil,
+      revision: record.revision,
       options,
       blueprintDataUrl: body.blueprintPreviewDataUrl,
       blueprintName: body.blueprintName,
@@ -106,18 +172,36 @@ export async function POST(req: Request) {
     );
   }
 
-  // Local convenience only: drop a copy in ./output. Skipped on serverless
-  // (read-only FS); the PDF still reaches the client via `pdfBase64` below.
-  let savedTo: string | undefined;
-  if (!process.env.VERCEL) {
-    try {
-      const rel = `output/${record.number}.pdf`;
-      await fs.mkdir(path.join(process.cwd(), "output"), { recursive: true });
-      await fs.writeFile(path.join(process.cwd(), rel), pdf);
-      savedTo = rel;
-    } catch (err) {
-      console.error("Could not write PDF to ./output", err);
-    }
+  // Save the PDF and its editable contents, so it can be reopened later.
+  let saved = false;
+  try {
+    const bp = body.blueprintMeta;
+    saved = await saveQuoteFiles(record.number, {
+      pdf,
+      blueprintDataUrl: body.blueprintSaveDataUrl,
+      draft: {
+        rooms,
+        applyGst: quote.applyGst,
+        discount,
+        optionCount: options.length,
+        client,
+        validUntil,
+        noBlueprint: !body.blueprintSaveDataUrl,
+        blueprint:
+          body.blueprintSaveDataUrl && bp
+            ? {
+                name: str(body.blueprintName, 200) || "Blueprint",
+                kind: bp.kind === "pdf" ? "pdf" : "png",
+                width: Number(bp.width) || 0,
+                height: Number(bp.height) || 0,
+                pageCount: Number(bp.pageCount) || 1,
+              }
+            : undefined,
+        savedAt: new Date().toISOString(),
+      },
+    });
+  } catch (err) {
+    console.error("Could not save the quotation files", err);
   }
 
   let transport: "smtp" | "stub" = "stub";
@@ -128,6 +212,7 @@ export async function POST(req: Request) {
       const r = await sendQuotationEmail({
         number: record.number,
         pdf,
+        edited: !!existing,
         optionTotals: options.map((q) => q.grandTotal),
         applyGst: quote.applyGst,
         employeeName: session.name,
@@ -148,9 +233,13 @@ export async function POST(req: Request) {
     grandTotal: quote.grandTotal,
     status: record.status,
     transport,
-    savedTo,
+    saved,
+    edited: !!existing,
+    revision: record.revision ?? 1,
+    validUntil,
     emailError,
-    // The recipient's only copy. The client offers it as a download.
+    // Offered as a download straight away (the saved copy is also at
+    // /api/quotations/<number>/pdf).
     pdfBase64: pdf.toString("base64"),
   });
 }

@@ -54,6 +54,8 @@ export async function sendQuotationEmail(args: {
   applyGst?: boolean;
   employeeName: string;
   employeeEmail: string;
+  /** an edited version of an existing quotation */
+  edited?: boolean;
 }): Promise<SendResult> {
   const { from, pass } = senderPass();
   const to = reviewerEmail();
@@ -69,7 +71,7 @@ export async function sendQuotationEmail(args: {
   if (!pass) return { transport: "stub", to };
 
   return send(to, from, pass, {
-    subject: `Shahi Lites: Quotation ${args.number} for review`,
+    subject: `Shahi Lites: Quotation ${args.number}${args.edited ? " (edited)" : ""} for review`,
     cc,
     text: [
       `Quotation ${args.number}`,
@@ -83,8 +85,8 @@ export async function sendQuotationEmail(args: {
             `Grand total: ${money(args.optionTotals[0] ?? 0)} (${args.applyGst === false ? "GST not included" : "incl. GST"})`,
           ]),
       "",
-      "The attached PDF is the only copy of this quotation. Shahi Lites does",
-      "not retain a copy of the document or its line items. Please keep it safe.",
+      "The quotation is also saved in the Shahi Lites app, where it can be",
+      "opened, reviewed and edited.",
     ].join("\n"),
     attachments: [{ filename: `${args.number}.pdf`, content: args.pdf }],
   });

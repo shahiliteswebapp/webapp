@@ -1,4 +1,6 @@
 import {
+  dimensionsOf,
+  skuOf,
   getAccessory,
   getSystem,
   systemImages,
@@ -74,6 +76,10 @@ export interface ComputedLine {
   discountLabel: string;
   total: number;
   image?: string;
+  /** product code shown on the quotation (see skuOf) */
+  sku: string;
+  /** size text, e.g. "D90MM X H70MM · cut-out 60MM"; empty when unknown */
+  dimensions: string;
   /** same light as Option 1 (no alternative picked) */
   inherited: boolean;
 }
@@ -166,6 +172,8 @@ export function computeRoom(room: DraftRoom, opt = 0): ComputedRoom {
       discountLabel: discount > 0 ? discountLabel(d) : "",
       total: round2(gross - discount),
       image: systemImages(sys)[0],
+      sku: skuOf(sys),
+      dimensions: dimensionsOf(sys),
       inherited: choice.inherited,
     });
     // Lines only merge when their discount matches too.

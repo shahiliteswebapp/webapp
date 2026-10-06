@@ -17,7 +17,9 @@ const impl = supabaseConfigured() ? supabaseStore : jsonStore;
 export const listQuotations = impl.listQuotations;
 export const getQuotation = impl.getQuotation;
 export const listEvents = impl.listEvents;
+export const rejectionCounts = impl.rejectionCounts;
 export const createQuotation = impl.createQuotation;
+export const updateQuotation = impl.updateQuotation;
 export const setStatus = impl.setStatus;
 
 export const isAllowed = impl.isAllowed;
