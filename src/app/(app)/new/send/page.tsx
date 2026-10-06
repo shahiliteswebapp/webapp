@@ -66,7 +66,8 @@ export default function SendPage() {
       const bp = draft.blueprint;
       const thumb = bp ? await downscaleDataUrl(bp.previewDataUrl, 1000) : undefined;
       // A sharper copy is saved with the quotation, for editing it later.
-      const keep = bp ? await downscaleDataUrl(bp.previewDataUrl, 1800) : undefined;
+      // JPEG keeps the request well under the hosting's 4.5 MB body limit.
+      const keep = bp ? await downscaleDataUrl(bp.previewDataUrl, 1800, "image/jpeg") : undefined;
       const res = await fetch("/api/quotations", {
         method: "POST",
         headers: { "content-type": "application/json" },

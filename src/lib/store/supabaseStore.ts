@@ -45,6 +45,24 @@ interface QuotationRow {
   reviewed_by: string | null;
   reviewed_at: string | null;
   review_note: string | null;
+  // added with saved/editable quotations; absent until schema.sql is re-run
+  client_name?: string | null;
+  revision?: number | null;
+  updated_at?: string | null;
+}
+
+/*
+ * True when Postgres / PostgREST says a column or function signature is
+ * unknown: schema.sql has not been re-run yet. Callers then fall back to the
+ * older shape so the app keeps working.
+ */
+function schemaOutdated(e: { code?: string; message?: string }): boolean {
+  return (
+    e.code === "PGRST202" || // function signature not found
+    e.code === "PGRST204" || // column not in schema cache
+    e.code === "42703" || // undefined column
+    /could not find .*(column|function)/i.test(e.message ?? "")
+  );
 }
 
 interface EventRow {
@@ -81,6 +99,9 @@ function mapRecord(r: QuotationRow): QuotationRecord {
     reviewedBy: r.reviewed_by ?? undefined,
     reviewedAt: r.reviewed_at ?? undefined,
     reviewNote: r.review_note ?? undefined,
+    clientName: r.client_name ?? undefined,
+    revision: r.revision ?? undefined,
+    updatedAt: r.updated_at ?? undefined,
   };
 }
 
@@ -174,20 +195,29 @@ export async function rejectionCounts(): Promise<Map<string, number>> {
 export async function createQuotation(
   input: CreateQuotationInput,
 ): Promise<QuotationRecord> {
-  const { data, error } = await getSupabase().rpc("create_quotation", {
+  const args = {
     p_employee_name: input.employeeName,
     p_employee_email: input.employeeEmail.toLowerCase(),
     p_total_amount: input.totalAmount,
     p_status: input.status,
+  };
+  let { data, error } = await getSupabase().rpc("create_quotation", {
+    ...args,
+    p_client_name: input.clientName ?? null,
   });
+  if (error && schemaOutdated(error)) {
+    console.warn("create_quotation: re-run supabase/schema.sql to store client names");
+    ({ data, error } = await getSupabase().rpc("create_quotation", args));
+  }
   if (error) throw dbError(error);
   const row = (Array.isArray(data) ? data[0] : data) as QuotationRow;
   return mapRecord(row);
 }
 
 /*
- * Record an edit. The live schema has no client / revision columns yet, so
- * only the total and status change here (the JSON store keeps the rest).
+ * Record an edit: new total, client and status; revision + 1; any earlier
+ * review decision is cleared (it was about the old version). Falls back to
+ * total + status only on a database that predates those columns.
  */
 export async function updateQuotation(
   id: string,
@@ -198,18 +228,29 @@ export async function updateQuotation(
   const current = await getQuotation(id);
   if (!current) return null;
 
-  const { data, error } = await sb
+  const base = {
+    total_amount: input.totalAmount,
+    status: input.status,
+    reviewed_by: null,
+    reviewed_at: null,
+    review_note: null,
+  };
+  const revision = (current.revision ?? 1) + 1;
+  let { data, error } = await sb
     .from("quotations")
     .update({
-      total_amount: input.totalAmount,
-      status: input.status,
-      reviewed_by: null,
-      reviewed_at: null,
-      review_note: null,
+      ...base,
+      ...(input.clientName ? { client_name: input.clientName } : {}),
+      revision,
+      updated_at: new Date().toISOString(),
     })
     .eq(column, id)
     .select("*")
     .maybeSingle();
+  if (error && schemaOutdated(error)) {
+    console.warn("updateQuotation: re-run supabase/schema.sql to store revisions");
+    ({ data, error } = await sb.from("quotations").update(base).eq(column, id).select("*").maybeSingle());
+  }
   if (error) throw dbError(error);
   if (!data) return null;
 
@@ -219,7 +260,7 @@ export async function updateQuotation(
     actor_email: input.actorEmail.toLowerCase(),
     from_status: current.status,
     to_status: input.status,
-    note: "Edited",
+    note: `Edited (revision ${revision})`,
   });
   if (evErr) throw dbError(evErr);
   return mapRecord(row);

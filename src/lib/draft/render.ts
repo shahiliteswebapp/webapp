@@ -119,6 +119,7 @@ async function renderPdf(file: File): Promise<RenderResult> {
 export async function downscaleDataUrl(
   dataUrl: string,
   maxPx: number,
+  type: "image/png" | "image/jpeg" = "image/png",
 ): Promise<string> {
   try {
     const img = await loadImage(dataUrl);
@@ -128,7 +129,7 @@ export async function downscaleDataUrl(
       img.naturalHeight,
       maxPx,
     );
-    return canvas.toDataURL("image/png");
+    return type === "image/jpeg" ? canvas.toDataURL(type, 0.85) : canvas.toDataURL(type);
   } catch {
     return dataUrl; // fall back to the original on any failure
   }

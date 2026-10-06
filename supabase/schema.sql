@@ -54,6 +54,11 @@ create index if not exists quotations_status_idx     on public.quotations (statu
 create index if not exists quotation_events_qid_idx  on public.quotation_events (quotation_id);
 create index if not exists app_users_status_idx      on public.app_users (status);
 
+-- Saved, editable quotations: who it is for, how many times it was edited.
+alter table public.quotations add column if not exists client_name text;
+alter table public.quotations add column if not exists revision    int not null default 1;
+alter table public.quotations add column if not exists updated_at  timestamptz;
+
 -- Also allow the new 'downloaded' status on a table created before this change.
 alter table public.quotations drop constraint if exists quotations_status_check;
 alter table public.quotations add constraint quotations_status_check
@@ -68,11 +73,15 @@ alter table public.app_users          enable row level security;
 
 -- atomic quotation creation: allocate SL-YYYY-NNNN + insert + log an event
 
+-- The older 4-argument version is replaced by the one below.
+drop function if exists public.create_quotation(text, text, numeric, text);
+
 create or replace function public.create_quotation(
   p_employee_name   text,
   p_employee_email  text,
   p_total_amount    numeric,
-  p_status          text default 'submitted_for_review'
+  p_status          text default 'submitted_for_review',
+  p_client_name     text default null
 ) returns public.quotations
 language plpgsql
 security definer
@@ -93,9 +102,9 @@ begin
   v_number := 'SL-' || v_year || '-' || lpad(v_seq::text, 4, '0');
 
   insert into public.quotations
-    (number, employee_name, employee_email, total_amount, status)
+    (number, employee_name, employee_email, total_amount, status, client_name)
   values
-    (v_number, p_employee_name, p_employee_email, p_total_amount, p_status)
+    (v_number, p_employee_name, p_employee_email, p_total_amount, p_status, p_client_name)
   returning * into v_row;
 
   insert into public.quotation_events (quotation_id, actor_email, to_status)
@@ -128,5 +137,11 @@ begin
   return v_row;
 end;
 $$;
+
+-- Private file storage for saved quotations (PDF, contents, blueprint).
+-- Never public: the server reads and writes it with the secret key.
+insert into storage.buckets (id, name, public)
+  values ('quotations', 'quotations', false)
+  on conflict (id) do update set public = false;
 
 notify pgrst, 'reload schema';
