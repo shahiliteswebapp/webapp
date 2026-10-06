@@ -160,7 +160,7 @@ export function CatalogManager({
             <div className="min-w-0 flex-1">
               <p className="truncate text-ink">{s.name}</p>
               <p className="truncate text-xs text-faint">
-                {s.kind === "functional" ? "Functional" : "Decorative"} · {skuOf(s)}
+                {skuOf(s)} · {s.kind === "functional" ? "Functional" : "Decorative"} · supplier {s.sourceCode}
                 {s.uploaded ? " · uploaded" : ""}
               </p>
             </div>

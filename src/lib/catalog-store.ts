@@ -2,7 +2,13 @@ import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { AwsClient } from "aws4fetch";
-import { applyCatalogChanges, type LightingSystem } from "./catalog";
+import {
+  BUILTIN_SYSTEMS,
+  applyCatalogChanges,
+  formatSku,
+  skuNumber,
+  type LightingSystem,
+} from "./catalog";
 
 /*
  * Superadmin-uploaded catalogue items and their photos.
@@ -91,6 +97,8 @@ export async function readLocalCatalogImage(name: string): Promise<Buffer | null
 export interface CatalogChanges {
   items: LightingSystem[];
   removed: string[];
+  /** last Shahi Lites SKU number handed out per kind, so numbers are never reused */
+  skuSeq?: { functional: number; decorative: number };
 }
 
 const EMPTY: CatalogChanges = { items: [], removed: [] };
@@ -104,6 +112,7 @@ function normalise(raw: unknown): CatalogChanges {
   return {
     items: Array.isArray(o.items) ? o.items : [],
     removed: Array.isArray(o.removed) ? o.removed.filter((x) => typeof x === "string") : [],
+    skuSeq: o.skuSeq,
   };
 }
 
@@ -164,16 +173,45 @@ export async function loadCatalogChanges(
   }
 }
 
-/** Add or replace uploaded items (matched by id). Re-uploading an item un-removes it. */
-export async function upsertUploadedItems(items: LightingSystem[]): Promise<number> {
+/** Highest SKU number of a kind in use or ever handed out. */
+function lastSku(kind: LightingSystem["kind"], state: CatalogChanges): number {
+  let max = state.skuSeq?.[kind] ?? 0;
+  for (const s of [...BUILTIN_SYSTEMS, ...state.items]) {
+    if (s.kind !== kind) continue;
+    const n = skuNumber(kind, s.slSku);
+    if (n !== null && n > max) max = n;
+  }
+  return max;
+}
+
+/**
+ * Add or replace uploaded items (matched by id). Re-uploading an item
+ * un-removes it. Every new item gets the next Shahi Lites SKU of its kind;
+ * an item being replaced keeps the SKU it already has.
+ */
+export async function upsertUploadedItems(items: LightingSystem[]): Promise<LightingSystem[]> {
   cache = null;
   const current = await readState();
   const byId = new Map(current.items.map((i) => [i.id, i]));
-  for (const item of items) byId.set(item.id, { ...item, uploaded: true } as LightingSystem);
+  const seq = {
+    functional: lastSku("functional", current),
+    decorative: lastSku("decorative", current),
+  };
+  const saved: LightingSystem[] = [];
+  for (const item of items) {
+    const kept = byId.get(item.id)?.slSku;
+    const slSku = kept ?? formatSku(item.kind, ++seq[item.kind]);
+    const next = { ...item, slSku, uploaded: true } as LightingSystem;
+    byId.set(item.id, next);
+    saved.push(next);
+  }
   const ids = new Set(items.map((i) => i.id));
-  const next = [...byId.values()];
-  await writeState({ items: next, removed: current.removed.filter((id) => !ids.has(id)) });
-  return next.length;
+  await writeState({
+    items: [...byId.values()],
+    removed: current.removed.filter((id) => !ids.has(id)),
+    skuSeq: seq,
+  });
+  return saved;
 }
 
 export async function deleteUploadedItems(ids: string[] | "all"): Promise<number> {

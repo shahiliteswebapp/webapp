@@ -92,14 +92,14 @@ export default async function DashboardPage() {
             </div>
             {/* Totals are for the superadmin only. */}
             {isSuperadmin ? (
-              <div className="text-right">
+              <div className="sm:text-right">
                 <div className="eyebrow">Grand total</div>
                 <div className="font-display text-3xl text-ink-deep">
                   {money(last.totalAmount)}
                 </div>
               </div>
             ) : last.clientName ? (
-              <div className="text-right">
+              <div className="sm:text-right">
                 <div className="eyebrow">Client</div>
                 <div className="font-display text-2xl text-ink-deep">{last.clientName}</div>
               </div>

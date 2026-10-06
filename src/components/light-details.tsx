@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   LAYER_LABEL,
   UNIT_LABEL,
+  skuOf,
   systemImages,
   type LightingSystem,
 } from "@/lib/catalog";
@@ -26,7 +27,6 @@ function specRows(sys: LightingSystem): [string, string][] {
           ["Colour", sys.colour],
           ["LED", sys.ledSource],
           ["IP rating", sys.ipRating],
-          ["Brand", sys.company],
           ["Category", sys.category],
           ["Layer", sys.layer ? `${sys.layer}. ${LAYER_LABEL[sys.layer]}` : null],
         ]
@@ -38,10 +38,9 @@ function specRows(sys: LightingSystem): [string, string][] {
           ["Type", sys.decorType],
           ["Mounting", sys.mounting],
           ["Style", sys.style],
-          ["Brand", sys.company],
-          ["SKU", sys.sku],
         ];
-  return rows.filter((r): r is [string, string] => Boolean(r[1]));
+  // Shahi Lites SKU only: supplier codes and brands stay out of view.
+  return [["SKU", skuOf(sys)] as [string, string], ...rows.filter((r): r is [string, string] => Boolean(r[1]))];
 }
 
 function Photo({ src, alt }: { src: string; alt: string }) {

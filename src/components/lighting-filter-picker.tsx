@@ -352,7 +352,7 @@ function FunctionalFlow({
         </select>
       </FieldRow>
 
-      <FieldRow label="Automatic">
+      <FieldRow label="Automated">
         <select
           className={selectClass}
           value={picks.automatic === undefined ? "" : picks.automatic ? "yes" : "no"}
@@ -367,8 +367,8 @@ function FunctionalFlow({
           }}
         >
           <option value="">Any</option>
-          <option value="yes">Automatic</option>
-          <option value="no">Non-automatic</option>
+          <option value="yes">Automated</option>
+          <option value="no">Non-automated</option>
         </select>
       </FieldRow>
 

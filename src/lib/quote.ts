@@ -1,4 +1,5 @@
 import {
+  clientName,
   dimensionsOf,
   skuOf,
   getAccessory,
@@ -76,8 +77,10 @@ export interface ComputedLine {
   discountLabel: string;
   total: number;
   image?: string;
-  /** product code shown on the quotation (see skuOf) */
+  /** Shahi Lites SKU (see skuOf); never the supplier code */
   sku: string;
+  /** plain description for the client: no supplier code, brand or model */
+  clientName: string;
   /** size text, e.g. "D90MM X H70MM · cut-out 60MM"; empty when unknown */
   dimensions: string;
   /** same light as Option 1 (no alternative picked) */
@@ -173,6 +176,7 @@ export function computeRoom(room: DraftRoom, opt = 0): ComputedRoom {
       total: round2(gross - discount),
       image: systemImages(sys)[0],
       sku: skuOf(sys),
+      clientName: label ? `${clientName(sys)} (${label})` : clientName(sys),
       dimensions: dimensionsOf(sys),
       inherited: choice.inherited,
     });

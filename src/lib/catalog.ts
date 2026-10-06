@@ -272,12 +272,64 @@ export function variantLabel(pick: { interfaceTag?: InterfaceTag; control?: Cont
   return parts.join(" ");
 }
 
-/**
- * The code printed on quotations as the SKU: Shahi Lites' own code when a
- * superadmin has set one, else the catalogue code.
+/*
+ * Shahi Lites SKUs: every product has a permanent code of its own,
+ * "SL-F0001" (functional) or "SL-D0001" (decorative). Built-in items carry
+ * theirs in catalog-data.json; uploaded items get the next free number when a
+ * superadmin adds them (catalog-store.ts). Numbers are never reused or
+ * renumbered. Supplier codes, brands and supplier model names stay inside
+ * the app and never reach a client.
  */
+export const SKU_PREFIX = { functional: "SL-F", decorative: "SL-D" } as const;
+
+export function formatSku(kind: LightingSystem["kind"], n: number): string {
+  return `${SKU_PREFIX[kind]}${String(n).padStart(4, "0")}`;
+}
+
+/** The number in a Shahi Lites SKU of that kind, or null. */
+export function skuNumber(kind: LightingSystem["kind"], sku: string | null | undefined): number | null {
+  const m = sku?.match(new RegExp(`^${SKU_PREFIX[kind]}(\\d+)$`));
+  return m ? Number(m[1]) : null;
+}
+
+/** The Shahi Lites SKU of a product (never the supplier code). */
 export function skuOf(sys: LightingSystem): string {
-  return (sys.slSku || sys.sourceCode || "").trim();
+  return (sys.slSku ?? "").trim() || `${SKU_PREFIX[sys.kind]}-${sys.id.slice(-6).toUpperCase()}`;
+}
+
+const escapeRe = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Title Case for all-caps catalogue text ("LED PANEL - RECESSED" -> "LED Panel - Recessed"). */
+function tidy(v: string): string {
+  if (v !== v.toUpperCase()) return v;
+  return v
+    .toLowerCase()
+    .replace(/\b([a-z])/g, (c) => c.toUpperCase())
+    .replace(/\b(Led|Cob|Mr16|Ip\d*)\b/gi, (w) => w.toUpperCase());
+}
+
+/*
+ * What a client reads for a product: a plain description with no supplier
+ * code, brand or model name ("COB Downlighter - Recessed, 7W";
+ * "Chandelier, Modern"). Used on the PDF.
+ */
+export function clientName(sys: LightingSystem): string {
+  if (sys.kind === "decorative") {
+    const style = sys.styleTags?.[0];
+    return [sys.decorType || "Decorative light", style ? tidy(style).replace(/^./, (c) => c.toUpperCase()) : null]
+      .filter(Boolean)
+      .join(", ");
+  }
+  const brandWords = [sys.company, "tisva", "eco", "geo"]
+    .filter((w): w is string => !!w)
+    .map((w) => w.toLowerCase());
+  let type = sys.category || "Light";
+  for (const w of brandWords) type = type.replace(new RegExp(`\\b${escapeRe(w)}\\b`, "gi"), "");
+  type = type.replace(/\s{2,}/g, " ").replace(/^[\s-]+|[\s-]+$/g, "").trim();
+  if (!type || /^uncategori[sz]ed$/i.test(type)) type = "Light";
+  type = tidy(type);
+  // Only a clean wattage ("12W"); the watt text sometimes holds notes.
+  return sys.wattNum && sys.wattNum > 0 ? `${type}, ${sys.wattNum}W` : type;
 }
 
 /** Dimensions as shown to clients, e.g. "D90MM X H70MM · cut-out 60MM". */

@@ -38,8 +38,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "No valid items to save." }, { status: 400 });
   }
   try {
-    const total = await upsertUploadedItems(items);
-    return NextResponse.json({ saved: items.length, total });
+    const saved = await upsertUploadedItems(items);
+    return NextResponse.json({
+      saved: saved.length,
+      skus: saved.map((i) => ({ id: i.id, name: i.name, slSku: i.slSku })),
+    });
   } catch (err) {
     console.error("Catalogue save failed", err);
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });

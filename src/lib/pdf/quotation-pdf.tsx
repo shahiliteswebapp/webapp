@@ -393,7 +393,7 @@ function SingleOptionLights({ room, photos }: { room: ComputedRoom; photos: Reco
           <Photo src={l.image ? photos[l.image] : undefined} size={104} />
           <View style={{ flexGrow: 1, flexShrink: 1, paddingLeft: 14 }}>
             <Text style={s.lightIndex}>LIGHT {i + 1}</Text>
-            <Text style={s.lightName}>{l.name}</Text>
+            <Text style={s.lightName}>{l.clientName}</Text>
             <Spec line={l} />
             <Text style={s.lightMeta}>
               {l.qty} {l.unitLabel} × {rs(l.unitCost)}
@@ -435,7 +435,7 @@ function MultiOptionLights({ rooms, photos }: { rooms: ComputedRoom[]; photos: R
                   {c ? (
                     <>
                       <Photo src={c.image ? photos[c.image] : undefined} size={photoSize} />
-                      <Text style={s.optName}>{c.name}</Text>
+                      <Text style={s.optName}>{c.clientName}</Text>
                       {c.inherited && <Text style={s.optNote}>Same as Option 1</Text>}
                       <Spec line={c} />
                       <Text style={s.lightMeta}>

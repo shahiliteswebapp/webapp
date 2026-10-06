@@ -50,7 +50,6 @@ function randomId(): string {
 interface Form {
   kind: "functional" | "decorative";
   name: string;
-  slSku: string;
   code: string;
   company: string;
   price: string;
@@ -78,7 +77,6 @@ interface Form {
 const EMPTY: Form = {
   kind: "functional",
   name: "",
-  slSku: "",
   code: "",
   company: "",
   price: "",
@@ -104,7 +102,7 @@ const EMPTY: Form = {
 function buildItem(f: Form, images: string[]): LightingSystem {
   const price = parseFloat(f.price);
   const wattNum = parseFloat(f.watts);
-  const code = f.code.trim() || f.slSku.trim();
+  const code = f.code.trim();
   const base = {
     id: `up-${f.kind[0]}-${slug(f.name || code || "item")}-${randomId()}`,
     sourceCode: code || f.name.trim(),
@@ -116,7 +114,6 @@ function buildItem(f: Form, images: string[]): LightingSystem {
     images,
     uploaded: true,
     company: f.company.trim() || null,
-    slSku: f.slSku.trim() || null,
   };
   const watt = Number.isFinite(wattNum) && wattNum > 0 ? `${wattNum}W` : f.watts.trim() || null;
   const size = f.size.trim() || null;
@@ -233,7 +230,12 @@ export function CatalogQuickAdd() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? `Save failed (${res.status})`);
-      setDone(`Added "${item.name}"${urls.length ? ` with ${urls.length} photo${urls.length === 1 ? "" : "s"}` : ""}.`);
+      const sku = (data.skus as { slSku?: string }[] | undefined)?.[0]?.slSku;
+      setDone(
+        `Added "${item.name}"${sku ? ` as ${sku}` : ""}${
+          urls.length ? ` with ${urls.length} photo${urls.length === 1 ? "" : "s"}` : ""
+        }.`,
+      );
       // Keep the branch and brand: the next product is often from the same set.
       setF({ ...EMPTY, kind: f.kind, company: f.company });
       setPhotos([]);
@@ -277,10 +279,7 @@ export function CatalogQuickAdd() {
         <Field label="Product name *">
           <input value={f.name} onChange={(e) => set("name", e.target.value)} className={inputClass} />
         </Field>
-        <Field label="Shahi Lites SKU" hint="Printed on quotations. Leave blank to use the supplier code.">
-          <input value={f.slSku} onChange={(e) => set("slSku", e.target.value)} className={inputClass} />
-        </Field>
-        <Field label="Supplier code">
+        <Field label="Supplier code" hint="Internal only. Clients see the Shahi Lites SKU, assigned automatically.">
           <input value={f.code} onChange={(e) => set("code", e.target.value)} className={inputClass} />
         </Field>
         <Field label="Brand">
@@ -362,7 +361,7 @@ export function CatalogQuickAdd() {
                   onChange={(e) => set("automatic", e.target.checked)}
                   className="h-4 w-4 accent-[var(--color-gold)]"
                 />
-                Automatic (smart control)
+                Automated (smart control)
               </label>
               {f.automatic && (
                 <div className="flex flex-wrap items-center gap-2">

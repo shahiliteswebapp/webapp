@@ -5,6 +5,7 @@ import type { Session } from "@/lib/session";
 import { cx } from "@/lib/cx";
 import { Wordmark } from "./brand";
 import { PlusWidget } from "./plus-widget";
+import { HeaderMenu } from "./header-menu";
 
 export function AppShell({
   session,
@@ -32,7 +33,7 @@ export function AppShell({
             </div>
             <span
               className={cx(
-                "grid h-9 w-9 place-items-center rounded-full border text-xs font-semibold uppercase",
+                "hidden h-9 w-9 place-items-center sm:grid rounded-full border text-xs font-semibold uppercase",
                 session.role === "superadmin"
                   ? "border-gold bg-gold-tint text-ink-deep"
                   : "border-hairline bg-panel text-muted",
@@ -41,7 +42,7 @@ export function AppShell({
             >
               {session.name.slice(0, 2)}
             </span>
-            <form action={signOutAction}>
+            <form action={signOutAction} className="hidden sm:block">
               <button
                 type="submit"
                 className="rounded-full border border-hairline px-3 py-1.5 text-xs text-muted hover:border-gold hover:text-ink"
@@ -49,11 +50,16 @@ export function AppShell({
                 Sign out
               </button>
             </form>
+            <HeaderMenu
+              name={session.name}
+              role={session.role}
+              isSuperadmin={session.role === "superadmin"}
+            />
           </div>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-5 pt-6 pb-28 lg:pb-10">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-5 pt-6 pb-10 sm:pb-28 lg:pb-10">
         {children}
       </main>
 

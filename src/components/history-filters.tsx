@@ -55,6 +55,7 @@ export function HistoryFilters() {
   const curTo = sp.get("to") ?? "";
   const curStatus = sp.get("status") ?? "";
 
+  const [open, setOpen] = useState(false);
   const [from, setFrom] = useState(curFrom);
   const [to, setTo] = useState(curTo);
 
@@ -77,8 +78,35 @@ export function HistoryFilters() {
       return (r.from ?? "") === curFrom && (r.to ?? "") === curTo;
     })?.key ?? (curFrom || curTo ? "custom" : "all");
 
+  const presetLabel =
+    activePreset === "custom"
+      ? "Custom dates"
+      : PRESETS.find((p) => p.key === activePreset)?.label ?? "All time";
+  const summary = [presetLabel, curStatus ? STATUS_LABEL[curStatus as QuotationStatus] : null]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
-    <div className="space-y-3 rounded-[var(--radius-card)] border border-hairline bg-panel/40 p-4">
+    <div className="space-y-2">
+      {/* Phones: the filters fold away behind one button. */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 rounded-[var(--radius-card)] border border-hairline bg-panel/40 px-4 py-2.5 text-left text-sm md:hidden"
+      >
+        <span className="min-w-0 truncate">
+          <span className="text-muted">Filters · </span>
+          <span className="text-ink">{summary}</span>
+        </span>
+        <span className="shrink-0 text-xs font-medium text-gold-deep">{open ? "Close" : "Change"}</span>
+      </button>
+    <div
+      className={cx(
+        "space-y-3 rounded-[var(--radius-card)] border border-hairline bg-panel/40 p-4 md:block",
+        open ? "block" : "hidden",
+      )}
+    >
       <div className="flex flex-wrap items-center gap-1.5">
         {PRESETS.map((p) => (
           <button
@@ -161,6 +189,7 @@ export function HistoryFilters() {
           </button>
         )}
       </div>
+    </div>
     </div>
   );
 }

@@ -5,13 +5,13 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { cx } from "@/lib/cx";
 
-const ITEMS = [
+export const MENU_ITEMS = [
   { href: "/new", label: "Start New", desc: "Build a quotation" },
   { href: "/history", label: "History", desc: "Past quotations" },
   { href: "/dashboard", label: "Dashboard", desc: "Overview" },
 ];
 
-const SUPERADMIN_ITEMS = [
+export const SUPERADMIN_MENU_ITEMS = [
   { href: "/review", label: "Review queue", desc: "Approve or reject" },
   { href: "/admin", label: "Access", desc: "Add or remove Gmail IDs" },
   { href: "/admin/catalog", label: "Catalogue", desc: "Add, remove, restore products" },
@@ -21,7 +21,7 @@ export function PlusWidget({ isSuperadmin = false }: { isSuperadmin?: boolean })
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
-  const items = isSuperadmin ? [...ITEMS, ...SUPERADMIN_ITEMS] : ITEMS;
+  const items = isSuperadmin ? [...MENU_ITEMS, ...SUPERADMIN_MENU_ITEMS] : MENU_ITEMS;
 
   // Close on route change (reset during render, not in an effect).
   const [openedAt, setOpenedAt] = useState(pathname);
@@ -52,7 +52,8 @@ export function PlusWidget({ isSuperadmin = false }: { isSuperadmin?: boolean })
   return (
     <div
       ref={rootRef}
-      className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3"
+      // Laptops and tablets only; phones use the header menu (header-menu.tsx).
+      className="fixed bottom-6 right-6 z-50 hidden flex-col items-end gap-3 sm:flex"
     >
       {open && (
         <div className="w-60 overflow-hidden rounded-[var(--radius-card)] border border-hairline bg-paper shadow-lg shadow-black/5">

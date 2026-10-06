@@ -130,10 +130,14 @@ export function CatalogUploader({ existing }: { existing: LightingSystem[] }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? `Save failed (${res.status})`);
       const photoCount = items.reduce((n, it) => n + it.images.length, 0);
+      const skus = (data.skus as { slSku?: string }[] | undefined) ?? [];
+      const range = skus.length
+        ? ` Shahi Lites SKUs ${skus[0].slSku}${skus.length > 1 ? ` to ${skus[skus.length - 1].slSku}` : ""}.`
+        : "";
       setDone(
         `Saved ${data.saved} product${data.saved === 1 ? "" : "s"} with ${photoCount} photo${
           photoCount === 1 ? "" : "s"
-        }.` + (failed.length ? ` ${failed.length} photo(s) failed: ${failed.slice(0, 5).join(", ")}.` : ""),
+        }.` + range + (failed.length ? ` ${failed.length} photo(s) failed: ${failed.slice(0, 5).join(", ")}.` : ""),
       );
       setParsed(null);
       setPhotos([]);
@@ -274,7 +278,7 @@ export function CatalogUploader({ existing }: { existing: LightingSystem[] }) {
                       const it = row.item;
                       const details =
                         it.kind === "functional"
-                          ? [it.watt, it.layer ? `Layer ${it.layer}` : null, it.glare, it.automatic ? "Auto" : "Non auto", it.interfaceOptions.map((o) => o.interface).join(", ")]
+                          ? [it.watt, it.layer ? `Layer ${it.layer}` : null, it.glare, it.automatic ? "Automated" : "Non-automated", it.interfaceOptions.map((o) => o.interface).join(", ")]
                           : [it.decorType, it.size, it.mounting, it.style];
                       const n = (match?.byRow[i].length ?? 0) + (it.images?.length ?? 0);
                       return (
