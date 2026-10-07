@@ -7,7 +7,8 @@ import { WizardSteps } from "@/components/wizard-steps";
 import { Button, ButtonLink, Eyebrow } from "@/components/ui";
 import { useDraft } from "@/lib/draft/context";
 import { money } from "@/lib/format";
-import { computeOptions, optionLabel } from "@/lib/quote";
+import { computeOptions, optionLabel, quotedLights } from "@/lib/quote";
+import { WarrantyList } from "@/components/warranty-list";
 import { DiscountInput } from "@/components/discount-input";
 import { OptionCountControl } from "@/components/option-count";
 import { cx } from "@/lib/cx";
@@ -15,8 +16,16 @@ import { draftStarted } from "@/lib/types";
 
 export default function SummaryPage() {
   const router = useRouter();
-  const { loaded, draft, addRoom, removeRoom, setApplyGst, setQuoteDiscount, setOptionCount } =
-    useDraft();
+  const {
+    loaded,
+    draft,
+    addRoom,
+    removeRoom,
+    setApplyGst,
+    setQuoteDiscount,
+    setOptionCount,
+    setWarranty,
+  } = useDraft();
   const [newRoom, setNewRoom] = useState("");
 
   useEffect(() => {
@@ -206,6 +215,12 @@ export default function SummaryPage() {
               Add
             </Button>
           </form>
+
+          <WarrantyList
+            lights={quotedLights(draft)}
+            warranty={draft.warranty}
+            onChange={setWarranty}
+          />
 
           {/* Totals */}
           <div className="rounded-[var(--radius-card)] border border-gold/40 bg-gold-tint/50 p-4">

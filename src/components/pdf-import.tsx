@@ -60,6 +60,7 @@ export function PdfImport({ onWarnings }: { onWarnings: (w: string[]) => void })
         optionCount: d.optionCount,
         client: d.client,
         validUntil: d.validUntil,
+        warranty: d.warranty,
         editOf: data.editOf,
         noBlueprint: true,
       };

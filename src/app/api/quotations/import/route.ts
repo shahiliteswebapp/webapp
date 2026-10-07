@@ -92,6 +92,7 @@ export async function POST(req: Request) {
       optionCount: draft.optionCount,
       client: draft.client,
       validUntil: draft.validUntil,
+      warranty: draft.warranty,
     },
     warnings: notes,
   });

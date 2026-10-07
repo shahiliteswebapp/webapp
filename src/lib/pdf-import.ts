@@ -1,5 +1,5 @@
 import { allSystems, type ControlMode, type LightingSystem } from "./catalog";
-import type { ClientDetails, Discount, DraftRoom, LineChoice, RoomLine } from "./types";
+import type { ClientDetails, Discount, DraftRoom, LineChoice, RoomLine, Warranty } from "./types";
 
 /*
  * Reads a Shahi Lites quotation PDF back into an editable draft, for PDFs
@@ -30,6 +30,8 @@ export interface ImportedDraft {
   optionCount: number;
   client?: ClientDetails;
   validUntil?: string;
+  /** warranty in years per light (system id) */
+  warranty?: Warranty;
   /** things the reader could not match, for the person to fix */
   warnings: string[];
 }

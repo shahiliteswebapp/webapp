@@ -12,7 +12,7 @@ import {
 } from "./catalog";
 import { QUOTE } from "./config";
 import { money0, round2 } from "./format";
-import { choiceFor, optionCountOf, type DraftRoom, type Discount, type QuoteDraft } from "./types";
+import { choiceFor, optionCountOf, type DraftRoom, type Discount, type QuoteDraft, type Warranty } from "./types";
 
 /*
  * Pure pricing engine. No IO. Given the wizard's rooms, produce a fully costed
@@ -85,6 +85,8 @@ export interface ComputedLine {
   dimensions: string;
   /** same light as Option 1 (no alternative picked) */
   inherited: boolean;
+  /** warranty in years, when one was set for this light */
+  warrantyYears?: number;
 }
 
 export interface ComputedAccessory {
@@ -134,7 +136,7 @@ export interface ComputedQuote {
   grandTotal: number;
 }
 
-export function computeRoom(room: DraftRoom, opt = 0): ComputedRoom {
+export function computeRoom(room: DraftRoom, opt = 0, warranty?: Warranty): ComputedRoom {
   // Aggregate line quantities by system + variant + price (the same system can
   // be added on several lines; different automation variants stay separate).
   const groups = new Map<
@@ -179,6 +181,7 @@ export function computeRoom(room: DraftRoom, opt = 0): ComputedRoom {
       clientName: label ? `${clientName(sys)} (${label})` : clientName(sys),
       dimensions: dimensionsOf(sys),
       inherited: choice.inherited,
+      warrantyYears: warranty?.[choice.systemId],
     });
     // Lines only merge when their discount matches too.
     const key = `${choice.systemId}|${label}|${unitCost}|${d ? `${d.kind}:${d.value}` : ""}`;
@@ -270,10 +273,10 @@ export function computeRoom(room: DraftRoom, opt = 0): ComputedRoom {
 
 export function computeQuote(
   rooms: DraftRoom[],
-  opts: { applyGst?: boolean; discount?: Discount; option?: number } = {},
+  opts: { applyGst?: boolean; discount?: Discount; option?: number; warranty?: Warranty } = {},
 ): ComputedQuote {
   const applyGst = opts.applyGst !== false;
-  const computed = rooms.map((r) => computeRoom(r, opts.option ?? 0));
+  const computed = rooms.map((r) => computeRoom(r, opts.option ?? 0, opts.warranty));
   const roomsTotal = round2(computed.reduce((s, r) => s + r.subtotal, 0));
   const discount = discountAmount(roomsTotal, opts.discount);
   const subtotal = round2(roomsTotal - discount);
@@ -301,11 +304,41 @@ export function computeQuote(
 
 /** Every option of a draft, priced: one ComputedQuote per option. */
 export function computeOptions(
-  draft: Pick<QuoteDraft, "rooms" | "applyGst" | "discount" | "optionCount">,
+  draft: Pick<QuoteDraft, "rooms" | "applyGst" | "discount" | "optionCount" | "warranty">,
 ): ComputedQuote[] {
   return Array.from({ length: optionCountOf(draft) }, (_, option) =>
-    computeQuote(draft.rooms, { applyGst: draft.applyGst, discount: draft.discount, option }),
+    computeQuote(draft.rooms, {
+      applyGst: draft.applyGst,
+      discount: draft.discount,
+      option,
+      warranty: draft.warranty,
+    }),
   );
+}
+
+export interface QuotedLight {
+  systemId: string;
+  /** catalogue (vendor) name, for the app */
+  name: string;
+  image?: string;
+}
+
+/** Every distinct light in a draft, across rooms and options, in first-use order. */
+export function quotedLights(draft: Pick<QuoteDraft, "rooms" | "optionCount">): QuotedLight[] {
+  const seen = new Map<string, QuotedLight>();
+  const n = optionCountOf(draft);
+  for (const room of draft.rooms) {
+    for (const line of room.lines) {
+      if (!(Number(line.qty) > 0)) continue;
+      for (let opt = 0; opt < n; opt++) {
+        const id = choiceFor(line, opt).systemId;
+        if (!id || seen.has(id)) continue;
+        const sys = getSystem(id);
+        if (sys) seen.set(id, { systemId: id, name: sys.name, image: systemImages(sys)[0] });
+      }
+    }
+  }
+  return [...seen.values()];
 }
 
 /** "Option 2" */

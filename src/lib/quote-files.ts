@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { getSupabase, supabaseConfigured } from "./supabase";
-import type { ClientDetails, Discount, DraftRoom } from "./types";
+import type { ClientDetails, Discount, DraftRoom, Warranty } from "./types";
 
 /*
  * Saved quotations: the generated PDF plus everything needed to reopen it in
@@ -43,6 +43,8 @@ export interface SavedDraft {
   client?: ClientDetails;
   /** YYYY-MM-DD, IST */
   validUntil?: string;
+  /** warranty in years per light (system id) */
+  warranty?: Warranty;
   noBlueprint: boolean;
   blueprint?: SavedBlueprint;
   savedAt: string;

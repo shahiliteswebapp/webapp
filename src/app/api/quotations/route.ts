@@ -9,7 +9,7 @@ import { sendQuotationEmail } from "@/lib/email";
 import { renderQuotationPdf } from "@/lib/pdf/quotation-pdf";
 import { productPhotosForPdf } from "@/lib/pdf/product-images";
 import { loadCatalogChanges } from "@/lib/catalog-store";
-import { canEditQuotation, type ClientDetails, type Discount, type DraftRoom } from "@/lib/types";
+import { canEditQuotation, cleanWarranty, type ClientDetails, type Discount, type DraftRoom } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +32,8 @@ interface Body {
   client?: ClientDetails;
   /** last valid day, YYYY-MM-DD (IST); unset = 60 days */
   validUntil?: string;
+  /** warranty in years per light (system id) */
+  warranty?: Record<string, number>;
   /** set when saving an edit of an existing quotation (it gets a NEW number) */
   editOf?: string;
   /** larger blueprint preview, saved so the quotation can be reopened */
@@ -98,11 +100,13 @@ export async function POST(req: Request) {
     body.discount && (body.discount.kind === "pct" || body.discount.kind === "amt")
       ? { kind: body.discount.kind, value: Number(body.discount.value) }
       : undefined;
+  const warranty = cleanWarranty(body.warranty);
   const options = computeOptions({
     rooms,
     applyGst: body.applyGst !== false,
     discount,
     optionCount: body.optionCount,
+    warranty,
   });
   const quote = options[0];
   if (options.some((q) => q.grandTotal <= 0)) {
@@ -152,6 +156,7 @@ export async function POST(req: Request) {
     optionCount: options.length,
     client,
     validUntil,
+    warranty,
     noBlueprint: !body.blueprintSaveDataUrl,
   };
 

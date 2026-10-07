@@ -184,7 +184,26 @@ export interface QuoteDraft {
   validUntil?: string;
   /** set when this draft is an edit of a saved quotation (its number) */
   editOf?: string;
+  /** warranty in years per light, keyed by catalogue system id */
+  warranty?: Warranty;
   rooms: DraftRoom[];
+}
+
+/** Warranty in years per light, keyed by catalogue system id. */
+export type Warranty = Record<string, number>;
+
+/** The longest warranty one light can carry, in years. */
+export const MAX_WARRANTY_YEARS = 50;
+
+/** Keeps whole years from 1 to MAX_WARRANTY_YEARS; drops anything else. */
+export function cleanWarranty(w: unknown): Warranty | undefined {
+  if (!w || typeof w !== "object") return undefined;
+  const out: Warranty = {};
+  for (const [id, v] of Object.entries(w as Record<string, unknown>).slice(0, 2000)) {
+    const n = Math.round(Number(v));
+    if (id && id.length <= 200 && n >= 1 && n <= MAX_WARRANTY_YEARS) out[id] = n;
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 /** True once the employee has started (blueprint uploaded, or skipped). */

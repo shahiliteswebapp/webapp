@@ -80,6 +80,7 @@ export default function SendPage() {
           optionCount: options.length,
           client,
           validUntil: untilYmd,
+          warranty: draft.warranty,
           editOf: editing,
           blueprintSaveDataUrl: keep,
           blueprintMeta: bp

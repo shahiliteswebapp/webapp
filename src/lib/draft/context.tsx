@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { MAX_OPTIONS, type ClientDetails, type Discount, type DraftBlueprint, type QuoteDraft, type RoomLine } from "@/lib/types";
+import { MAX_OPTIONS, MAX_WARRANTY_YEARS, type ClientDetails, type Discount, type DraftBlueprint, type QuoteDraft, type RoomLine } from "@/lib/types";
 import { idbClear, idbGet, idbSet } from "./idb";
 
 interface DraftContextValue {
@@ -35,6 +35,8 @@ interface DraftContextValue {
   setClient: (c: ClientDetails) => void;
   /** YYYY-MM-DD, or undefined for the default 60 days */
   setValidUntil: (v: string | undefined) => void;
+  /** warranty in years for one light (system id); undefined clears it */
+  setWarranty: (systemId: string, years: number | undefined) => void;
   /** replace the whole draft (reopening a saved quotation to edit it) */
   loadDraft: (d: QuoteDraft) => Promise<void>;
   discard: () => Promise<void>;
@@ -268,6 +270,20 @@ export function DraftProvider({ children }: { children: ReactNode }) {
     [mutate],
   );
 
+  const setWarranty = useCallback(
+    (systemId: string, years: number | undefined) => {
+      mutate((d) => {
+        const w = { ...d.warranty };
+        const n = Math.round(Number(years));
+        if (n >= 1) w[systemId] = Math.min(n, MAX_WARRANTY_YEARS);
+        else delete w[systemId];
+        d.warranty = Object.keys(w).length ? w : undefined;
+        return d;
+      });
+    },
+    [mutate],
+  );
+
   const loadDraft = useCallback(async (d: QuoteDraft) => {
     d.updatedAt = new Date().toISOString();
     setDraft(d);
@@ -307,6 +323,7 @@ export function DraftProvider({ children }: { children: ReactNode }) {
       setRoomLines,
       setClient,
       setValidUntil,
+      setWarranty,
       loadDraft,
       discard,
     }),
@@ -329,6 +346,7 @@ export function DraftProvider({ children }: { children: ReactNode }) {
       setRoomLines,
       setClient,
       setValidUntil,
+      setWarranty,
       loadDraft,
       discard,
     ],

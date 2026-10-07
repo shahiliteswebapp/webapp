@@ -63,6 +63,7 @@ export default function EditQuotationPage() {
         client: saved.client,
         // Keep the chosen date while it is still ahead; else back to 60 days.
         validUntil: isValidValidUntil(saved.validUntil) ? saved.validUntil : undefined,
+        warranty: saved.warranty,
         editOf: number,
         noBlueprint: !saved.blueprint || !data.blueprintDataUrl,
       };

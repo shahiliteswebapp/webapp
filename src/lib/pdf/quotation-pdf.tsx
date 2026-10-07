@@ -189,6 +189,7 @@ const s = StyleSheet.create({
   },
   lightMeta: { fontSize: 8, color: MUTED, ...NO_LIGA },
   lightSpec: { fontSize: 7.5, color: INK, marginBottom: 2, ...NO_LIGA },
+  warranty: { fontSize: 7.5, color: GOLD, marginBottom: 2, ...NO_LIGA },
   clientBox: {
     marginTop: 14,
     borderLeftWidth: 2,
@@ -362,6 +363,15 @@ function Spec({ line }: { line: Pick<ComputedLine, "sku" | "dimensions"> }) {
   return parts.length ? <Text style={s.lightSpec}>{parts.join("  ·  ")}</Text> : null;
 }
 
+/** "Warranty 2 years", when the light has one. */
+function WarrantyNote({ years }: { years?: number }) {
+  return years ? (
+    <Text style={s.warranty}>
+      Warranty {years} year{years === 1 ? "" : "s"}
+    </Text>
+  ) : null;
+}
+
 /* ------------------------------ room lights ------------------------------ */
 
 const OPT_GAP = 10;
@@ -395,6 +405,7 @@ function SingleOptionLights({ room, photos }: { room: ComputedRoom; photos: Reco
             <Text style={s.lightIndex}>LIGHT {i + 1}</Text>
             <Text style={s.lightName}>{l.clientName}</Text>
             <Spec line={l} />
+            <WarrantyNote years={l.warrantyYears} />
             <Text style={s.lightMeta}>
               {l.qty} {l.unitLabel} × {rs(l.unitCost)}
               {l.discount > 0 ? `  ·  Discount ${l.discountLabel} (−${rs(l.discount)})` : ""}
@@ -438,6 +449,7 @@ function MultiOptionLights({ rooms, photos }: { rooms: ComputedRoom[]; photos: R
                       <Text style={s.optName}>{c.clientName}</Text>
                       {c.inherited && <Text style={s.optNote}>Same as Option 1</Text>}
                       <Spec line={c} />
+                      <WarrantyNote years={c.warrantyYears} />
                       <Text style={s.lightMeta}>
                         {c.qty} {c.unitLabel} × {rs(c.unitCost)}
                       </Text>
