@@ -41,7 +41,18 @@ export async function uploadPhoto(file: File): Promise<string> {
   return data.url as string;
 }
 
-export function CatalogUploader({ existing }: { existing: LightingSystem[] }) {
+/**
+ * `manage` (superadmin): re-uploading a row updates it, and the uploaded
+ * products are listed with delete buttons. Employees only add new products;
+ * rows already in the catalogue are skipped.
+ */
+export function CatalogUploader({
+  existing = [],
+  manage = false,
+}: {
+  existing?: LightingSystem[];
+  manage?: boolean;
+}) {
   const router = useRouter();
   const excelRef = useRef<HTMLInputElement>(null);
   const photosRef = useRef<HTMLInputElement>(null);
@@ -130,10 +141,17 @@ export function CatalogUploader({ existing }: { existing: LightingSystem[] }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? `Save failed (${res.status})`);
       const photoCount = items.reduce((n, it) => n + it.images.length, 0);
+      const skipped: number = data.skipped ?? 0;
       setDone(
-        `Saved ${data.saved} product${data.saved === 1 ? "" : "s"} with ${photoCount} photo${
-          photoCount === 1 ? "" : "s"
-        }.` + (failed.length ? ` ${failed.length} photo(s) failed: ${failed.slice(0, 5).join(", ")}.` : ""),
+        `Saved ${data.saved} product${data.saved === 1 ? "" : "s"}` +
+          (skipped ? "" : ` with ${photoCount} photo${photoCount === 1 ? "" : "s"}`) +
+          "." +
+          (skipped
+            ? ` ${skipped} already in the catalogue and left unchanged: ${(data.skippedNames ?? []).join(", ")}${
+                skipped > 10 ? "…" : ""
+              }.`
+            : "") +
+          (failed.length ? ` ${failed.length} photo(s) failed: ${failed.slice(0, 5).join(", ")}.` : ""),
       );
       setParsed(null);
       setPhotos([]);
@@ -180,7 +198,9 @@ export function CatalogUploader({ existing }: { existing: LightingSystem[] }) {
             (photo file names or direct https photo links).
             Photos match a row by the Image column, by Code (GCL-110.jpg), or by tab and S. No.
             (F-1.jpg, D-3.jpg; F-1_2.jpg for a second photo). Up to {MAX_PHOTOS} photos at a time.
-            Re-uploading the same row updates it.
+            {manage
+              ? " Re-uploading the same row updates it."
+              : " Rows already in the catalogue are skipped, so only new products are added."}
           </p>
         </div>
 
@@ -335,6 +355,7 @@ export function CatalogUploader({ existing }: { existing: LightingSystem[] }) {
         )}
       </section>
 
+      {manage && (
       <section className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -388,6 +409,7 @@ export function CatalogUploader({ existing }: { existing: LightingSystem[] }) {
           </ul>
         )}
       </section>
+      )}
     </div>
   );
 }

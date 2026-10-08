@@ -32,8 +32,9 @@ function isItem(v: unknown, anyId = false): v is LightingSystem {
 }
 
 /**
- * Add catalogue items. The superadmin can also replace uploaded items (the
- * Excel upload); employees can only add new products, a few at a time.
+ * Add catalogue items, one or a whole Excel sheet. The superadmin can also
+ * replace uploaded items by re-uploading them; for employees, rows that
+ * already exist are skipped and only new products are added.
  */
 export async function POST(req: Request) {
   const session = await getSession();
@@ -48,22 +49,21 @@ export async function POST(req: Request) {
   if (!Array.isArray(items) || items.length === 0 || !items.every((i) => isItem(i))) {
     return NextResponse.json({ error: "No valid items to save." }, { status: 400 });
   }
-  if (!isSuperadmin && items.length > 10) {
-    return NextResponse.json({ error: "Add up to 10 products at a time." }, { status: 400 });
+  if (items.length > 2000) {
+    return NextResponse.json({ error: "Up to 2,000 products at a time." }, { status: 400 });
   }
   try {
-    const saved = await upsertUploadedItems(items, {
+    const { saved, skipped } = await upsertUploadedItems(items, {
       newOnly: !isSuperadmin,
       addedBy: session.email,
     });
     return NextResponse.json({
       saved: saved.length,
+      skipped: skipped.length,
+      skippedNames: skipped.slice(0, 10).map((i) => i.name),
       skus: saved.map((i) => ({ id: i.id, name: i.name, slSku: i.slSku })),
     });
   } catch (err) {
-    if (err instanceof ExistingProductError) {
-      return NextResponse.json({ error: err.message }, { status: 403 });
-    }
     console.error("Catalogue save failed", err);
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }

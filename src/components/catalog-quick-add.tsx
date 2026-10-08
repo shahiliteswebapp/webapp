@@ -353,6 +353,7 @@ export function CatalogQuickAdd({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? `Save failed (${res.status})`);
+      if (!editing && data.saved === 0) throw new Error("That product is already in the catalogue.");
       const message = editing
         ? `Saved changes to "${item.name}".`
         : `Added "${item.name}"${

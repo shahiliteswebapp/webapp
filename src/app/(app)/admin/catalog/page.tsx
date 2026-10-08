@@ -34,7 +34,7 @@ export default async function CatalogAdminPage() {
           <span className="hidden shrink-0 text-xs font-medium text-gold-deep group-open:inline">Close</span>
         </summary>
         <div className="border-t border-hairline p-4">
-          <CatalogUploader existing={items} />
+          <CatalogUploader existing={items} manage />
         </div>
       </details>
       <CatalogManager changes={{ items, removed, edits, popular }} />

@@ -5,6 +5,7 @@ import { UNIT_LABEL } from "@/lib/catalog";
 import { fmtDateTime, money } from "@/lib/format";
 import { Eyebrow, PageHeader } from "@/components/ui";
 import { CatalogQuickAdd } from "@/components/catalog-quick-add";
+import { CatalogUploader } from "@/components/catalog-uploader";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Add a product · Shahi Lites" };
@@ -38,6 +39,19 @@ export default async function AddProductPage() {
         )}
       </p>
       <CatalogQuickAdd />
+      <details className="group rounded-[var(--radius-card)] border border-hairline">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm">
+          <span>
+            <span className="font-medium text-ink">Bulk upload from Excel</span>
+            <span className="block text-xs text-muted">Many new products at once, with photos.</span>
+          </span>
+          <span className="shrink-0 text-xs font-medium text-gold-deep group-open:hidden">Open</span>
+          <span className="hidden shrink-0 text-xs font-medium text-gold-deep group-open:inline">Close</span>
+        </summary>
+        <div className="border-t border-hairline p-4">
+          <CatalogUploader />
+        </div>
+      </details>
 
       {mine.length > 0 && (
         <section className="space-y-2 border-t border-hairline pt-6">

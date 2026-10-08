@@ -202,7 +202,7 @@ function withoutFlags(item: LightingSystem): LightingSystem {
   return copy;
 }
 
-/** Thrown when an employee tries to change a product that already exists. */
+/** Thrown when a product to edit is not in the catalogue. */
 export class ExistingProductError extends Error {}
 
 /**
@@ -210,21 +210,21 @@ export class ExistingProductError extends Error {}
  * un-removes it. Every new item gets the next Shahi Lites SKU of its kind;
  * an item being replaced keeps the SKU it already has.
  *
- * `newOnly` (employees): every item must be new; nothing existing is touched.
+ * `newOnly` (employees): only new products are added; any item that already
+ * exists is skipped and left exactly as it is.
  */
 export async function upsertUploadedItems(
-  items: LightingSystem[],
+  all: LightingSystem[],
   opts: { newOnly?: boolean; addedBy?: string } = {},
-): Promise<LightingSystem[]> {
+): Promise<{ saved: LightingSystem[]; skipped: LightingSystem[] }> {
   cache = null;
   const current = await readState();
   const byId = new Map(current.items.map((i) => [i.id, i]));
-  if (opts.newOnly) {
-    const builtin = new Set(BUILTIN_SYSTEMS.map((s) => s.id));
-    if (items.some((i) => byId.has(i.id) || builtin.has(i.id))) {
-      throw new ExistingProductError("Only new products can be added.");
-    }
-  }
+  const builtin = new Set(BUILTIN_SYSTEMS.map((s) => s.id));
+  const exists = (i: LightingSystem) => byId.has(i.id) || builtin.has(i.id);
+  const items = opts.newOnly ? all.filter((i) => !exists(i)) : all;
+  const skipped = opts.newOnly ? all.filter(exists) : [];
+  if (items.length === 0) return { saved: [], skipped };
   const now = new Date().toISOString();
   const seq = {
     functional: lastSku("functional", current),
@@ -253,7 +253,7 @@ export async function upsertUploadedItems(
     removed: current.removed.filter((id) => !ids.has(id)),
     skuSeq: seq,
   });
-  return saved;
+  return { saved, skipped };
 }
 
 /**
