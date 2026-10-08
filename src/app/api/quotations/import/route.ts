@@ -93,6 +93,7 @@ export async function POST(req: Request) {
       client: draft.client,
       validUntil: draft.validUntil,
       warranty: draft.warranty,
+      leadTime: draft.leadTime,
     },
     warnings: notes,
   });

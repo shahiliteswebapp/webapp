@@ -13,10 +13,11 @@ export const metadata = { title: "Sign in · Shahi Lites" };
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; next?: string }>;
 }) {
-  if (await getSession()) redirect("/dashboard");
-  const { error } = await searchParams;
+  const { error, next } = await searchParams;
+  const back = typeof next === "string" && next.startsWith("/") && !next.startsWith("//") ? next : "";
+  if (await getSession()) redirect(back || "/dashboard");
   const googleMode = googleAuthConfigured();
 
   return (
@@ -53,6 +54,7 @@ export default async function SignInPage({
                 Use your Shahi Lites Google account.
               </p>
               <form action={signInGoogleAction} className="mt-5">
+                {back && <input type="hidden" name="next" value={back} />}
                 <Button type="submit" variant="secondary" className="w-full">
                   <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden>
                     <path
@@ -84,6 +86,7 @@ export default async function SignInPage({
                 real Google sign-in; nothing else changes.
               </p>
               <form action={signInMockAction} className="mt-5 space-y-4">
+                {back && <input type="hidden" name="next" value={back} />}
                 <label className="block">
                   <span className="text-xs font-medium text-muted">Name</span>
                   <input

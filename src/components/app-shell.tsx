@@ -1,13 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { signOutAction } from "@/lib/actions/auth";
 import type { Session } from "@/lib/session";
-import { cx } from "@/lib/cx";
 import { Wordmark } from "./brand";
-import { PlusWidget } from "./plus-widget";
 import { HeaderMenu } from "./header-menu";
 import { InstallApp } from "./install-app";
 
+/* The same header and menu on phones, tablets and laptops. */
 export function AppShell({
   session,
   children,
@@ -22,50 +20,16 @@ export function AppShell({
           <Link href="/dashboard" className="shrink-0">
             <Wordmark />
           </Link>
-
-          <div className="flex items-center gap-3">
-            <div className="hidden text-right sm:block">
-              <div className="text-sm leading-tight text-ink">
-                {session.name}
-              </div>
-              <div className="text-xs leading-tight text-muted capitalize">
-                {session.role}
-              </div>
-            </div>
-            <span
-              className={cx(
-                "hidden h-9 w-9 place-items-center sm:grid rounded-full border text-xs font-semibold uppercase",
-                session.role === "superadmin"
-                  ? "border-gold bg-gold-tint text-ink-deep"
-                  : "border-hairline bg-panel text-muted",
-              )}
-              aria-hidden
-            >
-              {session.name.slice(0, 2)}
-            </span>
-            <form action={signOutAction} className="hidden sm:block">
-              <button
-                type="submit"
-                className="rounded-full border border-hairline px-3 py-1.5 text-xs text-muted hover:border-gold hover:text-ink"
-              >
-                Sign out
-              </button>
-            </form>
-            <HeaderMenu
-              name={session.name}
-              role={session.role}
-              isSuperadmin={session.role === "superadmin"}
-            />
-          </div>
+          <HeaderMenu
+            name={session.name}
+            role={session.role}
+            isSuperadmin={session.role === "superadmin"}
+          />
         </div>
         <InstallApp />
       </header>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-5 pt-6 pb-10 sm:pb-28 lg:pb-10">
-        {children}
-      </main>
-
-      <PlusWidget isSuperadmin={session.role === "superadmin"} />
+      <main className="mx-auto w-full max-w-6xl flex-1 px-5 pt-6 pb-10">{children}</main>
     </div>
   );
 }

@@ -5,6 +5,13 @@ import { googleAuthConfigured } from "@/lib/auth-config";
 import { clearSession, setSession } from "@/lib/session";
 import type { Role } from "@/lib/types";
 
+/** Where to land after signing in: a same-site path from ?next=, else the dashboard. */
+function landing(formData: FormData): string {
+  const next = String(formData.get("next") ?? "");
+  const safe = next.startsWith("/") && !next.startsWith("//") && !next.includes("\\");
+  return safe && !next.startsWith("/sign-in") ? next : "/dashboard";
+}
+
 /** Local mock sign-in, only used when Google auth is not configured. */
 export async function signInMockAction(formData: FormData): Promise<void> {
   const name = String(formData.get("name") ?? "").trim();
@@ -28,13 +35,13 @@ export async function signInMockAction(formData: FormData): Promise<void> {
   }
 
   await setSession({ name, email, role });
-  redirect("/dashboard");
+  redirect(landing(formData));
 }
 
 /** Start the Google OAuth flow. */
-export async function signInGoogleAction(): Promise<void> {
+export async function signInGoogleAction(formData: FormData): Promise<void> {
   const { signIn } = await import("@/auth");
-  await signIn("google", { redirectTo: "/dashboard" });
+  await signIn("google", { redirectTo: landing(formData) });
 }
 
 export async function signOutAction(): Promise<void> {

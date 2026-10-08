@@ -9,7 +9,17 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { MAX_OPTIONS, MAX_WARRANTY_YEARS, type ClientDetails, type Discount, type DraftBlueprint, type QuoteDraft, type RoomLine } from "@/lib/types";
+import {
+  MAX_OPTIONS,
+  MAX_WARRANTY_YEARS,
+  cleanLeadTime,
+  type ClientDetails,
+  type Discount,
+  type DraftBlueprint,
+  type LeadTime,
+  type QuoteDraft,
+  type RoomLine,
+} from "@/lib/types";
 import { idbClear, idbGet, idbSet } from "./idb";
 
 interface DraftContextValue {
@@ -26,7 +36,8 @@ interface DraftContextValue {
   setQuoteDiscount: (d: Discount | undefined) => void;
   /** how many options (1 to 3) the quotation offers */
   setOptionCount: (n: number) => void;
-  addRoom: (name: string) => void;
+  /** adds a room; returns its id, or null for an empty name */
+  addRoom: (name: string) => string | null;
   addRooms: (names: string[]) => void;
   renameRoom: (id: string, name: string) => void;
   removeRoom: (id: string) => void;
@@ -37,6 +48,8 @@ interface DraftContextValue {
   setValidUntil: (v: string | undefined) => void;
   /** warranty in years for one light (system id); undefined clears it */
   setWarranty: (systemId: string, years: number | undefined) => void;
+  /** delivery lead time for one light (system id); undefined clears it */
+  setLeadTime: (systemId: string, t: LeadTime | undefined) => void;
   /** replace the whole draft (reopening a saved quotation to edit it) */
   loadDraft: (d: QuoteDraft) => Promise<void>;
   discard: () => Promise<void>;
@@ -180,11 +193,13 @@ export function DraftProvider({ children }: { children: ReactNode }) {
   const addRoom = useCallback(
     (name: string) => {
       const trimmed = name.trim();
-      if (!trimmed) return;
+      if (!trimmed) return null;
+      const id = uid();
       mutate((d) => {
-        d.rooms.push({ id: uid(), name: trimmed, lines: [] });
+        d.rooms.push({ id, name: trimmed, lines: [] });
         return d;
       });
+      return id;
     },
     [mutate],
   );
@@ -284,6 +299,20 @@ export function DraftProvider({ children }: { children: ReactNode }) {
     [mutate],
   );
 
+  const setLeadTime = useCallback(
+    (systemId: string, t: LeadTime | undefined) => {
+      mutate((d) => {
+        const all = { ...d.leadTime };
+        if (t) all[systemId] = t;
+        else delete all[systemId];
+        // Out-of-range values drop out here, like on the server.
+        d.leadTime = cleanLeadTime(all);
+        return d;
+      });
+    },
+    [mutate],
+  );
+
   const loadDraft = useCallback(async (d: QuoteDraft) => {
     d.updatedAt = new Date().toISOString();
     setDraft(d);
@@ -324,6 +353,7 @@ export function DraftProvider({ children }: { children: ReactNode }) {
       setClient,
       setValidUntil,
       setWarranty,
+      setLeadTime,
       loadDraft,
       discard,
     }),
@@ -347,6 +377,7 @@ export function DraftProvider({ children }: { children: ReactNode }) {
       setClient,
       setValidUntil,
       setWarranty,
+      setLeadTime,
       loadDraft,
       discard,
     ],

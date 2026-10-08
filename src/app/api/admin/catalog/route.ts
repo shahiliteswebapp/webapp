@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { deleteUploadedItems, setRemoved, upsertUploadedItems } from "@/lib/catalog-store";
+import {
+  ExistingProductError,
+  deleteUploadedItems,
+  saveProductEdit,
+  setPopular,
+  setRemoved,
+  upsertUploadedItems,
+} from "@/lib/catalog-store";
 import type { LightingSystem } from "@/lib/catalog";
 
 export const runtime = "nodejs";
@@ -11,40 +18,79 @@ async function superadmin() {
   return session?.role === "superadmin" ? session : null;
 }
 
-function isItem(v: unknown): v is LightingSystem {
+function isItem(v: unknown, anyId = false): v is LightingSystem {
   const o = v as Partial<LightingSystem> | null;
   return (
     !!o &&
     typeof o.id === "string" &&
-    o.id.startsWith("up-") &&
+    o.id.length <= 200 &&
+    (anyId || o.id.startsWith("up-")) &&
     typeof o.name === "string" &&
     (o.kind === "functional" || o.kind === "decorative") &&
     typeof o.unitCost === "number"
   );
 }
 
-/** Add or replace uploaded catalogue items. */
+/**
+ * Add catalogue items. The superadmin can also replace uploaded items (the
+ * Excel upload); employees can only add new products, a few at a time.
+ */
 export async function POST(req: Request) {
-  if (!(await superadmin())) {
-    return NextResponse.json({ error: "Superadmin only." }, { status: 403 });
-  }
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  const isSuperadmin = session.role === "superadmin";
   let items: unknown;
   try {
     items = ((await req.json()) as { items?: unknown }).items;
   } catch {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
-  if (!Array.isArray(items) || items.length === 0 || !items.every(isItem)) {
+  if (!Array.isArray(items) || items.length === 0 || !items.every((i) => isItem(i))) {
     return NextResponse.json({ error: "No valid items to save." }, { status: 400 });
   }
+  if (!isSuperadmin && items.length > 10) {
+    return NextResponse.json({ error: "Add up to 10 products at a time." }, { status: 400 });
+  }
   try {
-    const saved = await upsertUploadedItems(items);
+    const saved = await upsertUploadedItems(items, {
+      newOnly: !isSuperadmin,
+      addedBy: session.email,
+    });
     return NextResponse.json({
       saved: saved.length,
       skus: saved.map((i) => ({ id: i.id, name: i.name, slSku: i.slSku })),
     });
   } catch (err) {
+    if (err instanceof ExistingProductError) {
+      return NextResponse.json({ error: err.message }, { status: 403 });
+    }
     console.error("Catalogue save failed", err);
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+  }
+}
+
+/** Superadmin: edit any product, built-in or uploaded: { item }. */
+export async function PUT(req: Request) {
+  if (!(await superadmin())) {
+    return NextResponse.json({ error: "Superadmin only." }, { status: 403 });
+  }
+  let item: unknown;
+  try {
+    item = ((await req.json()) as { item?: unknown }).item;
+  } catch {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+  if (!isItem(item, true)) {
+    return NextResponse.json({ error: "Not a valid product." }, { status: 400 });
+  }
+  try {
+    const saved = await saveProductEdit(item);
+    return NextResponse.json({ saved: { id: saved.id, name: saved.name, slSku: saved.slSku } });
+  } catch (err) {
+    if (err instanceof ExistingProductError) {
+      return NextResponse.json({ error: err.message }, { status: 404 });
+    }
+    console.error("Catalogue edit failed", err);
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }
@@ -79,12 +125,13 @@ export async function DELETE(req: Request) {
 /**
  * Remove built-in items from the picker, or bring them back:
  * { remove: [...ids] } or { restore: [...ids] }.
+ * Mark products popular, or clear the mark: { popular: [...ids] } or { unpopular: [...ids] }.
  */
 export async function PATCH(req: Request) {
   if (!(await superadmin())) {
     return NextResponse.json({ error: "Superadmin only." }, { status: 403 });
   }
-  let body: { remove?: unknown; restore?: unknown };
+  let body: { remove?: unknown; restore?: unknown; popular?: unknown; unpopular?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -92,6 +139,16 @@ export async function PATCH(req: Request) {
   }
   const isIds = (v: unknown): v is string[] =>
     Array.isArray(v) && v.length > 0 && v.every((i) => typeof i === "string");
+  if (isIds(body.popular) || isIds(body.unpopular)) {
+    const on = isIds(body.popular);
+    try {
+      const popular = await setPopular((on ? body.popular : body.unpopular) as string[], on);
+      return NextResponse.json({ popular });
+    } catch (err) {
+      console.error("Catalogue popular mark failed", err);
+      return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+    }
+  }
   const remove = isIds(body.remove);
   const ids = remove ? (body.remove as string[]) : isIds(body.restore) ? body.restore : null;
   if (!ids) return NextResponse.json({ error: "Nothing to change." }, { status: 400 });

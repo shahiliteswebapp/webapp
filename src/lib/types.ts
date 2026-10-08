@@ -137,7 +137,10 @@ export interface LineChoice {
   /** chosen automation variant (functional systems with interface options) */
   interfaceTag?: string;
   control?: "dimmable" | "tunable";
-  /** employee-entered rate, only used when the catalogue has no price */
+  /**
+   * Employee-entered rate per unit. Required when the catalogue has no price;
+   * when it has one, this replaces it for this quotation (special pricing).
+   */
   unitPrice?: number;
 }
 
@@ -186,6 +189,10 @@ export interface QuoteDraft {
   editOf?: string;
   /** warranty in years per light, keyed by catalogue system id */
   warranty?: Warranty;
+  /** delivery lead time per light, keyed by catalogue system id */
+  leadTime?: LeadTimes;
+  /** share-link key, when a teammate opened someone else's quotation to edit */
+  shareKey?: string;
   rooms: DraftRoom[];
 }
 
@@ -202,6 +209,38 @@ export function cleanWarranty(w: unknown): Warranty | undefined {
   for (const [id, v] of Object.entries(w as Record<string, unknown>).slice(0, 2000)) {
     const n = Math.round(Number(v));
     if (id && id.length <= 200 && n >= 1 && n <= MAX_WARRANTY_YEARS) out[id] = n;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** Delivery lead time for one light, e.g. 3 weeks. */
+export interface LeadTime {
+  value: number;
+  unit: "days" | "weeks";
+}
+
+/** Lead time per light, keyed by catalogue system id. */
+export type LeadTimes = Record<string, LeadTime>;
+
+export const MAX_LEAD_DAYS = 365;
+export const MAX_LEAD_WEEKS = 52;
+
+/** "3 weeks", "1 day". */
+export function leadTimeLabel(t: LeadTime): string {
+  const unit = t.value === 1 ? t.unit.slice(0, -1) : t.unit;
+  return `${t.value} ${unit}`;
+}
+
+/** Keeps whole days (1 to 365) or weeks (1 to 52); drops anything else. */
+export function cleanLeadTime(raw: unknown): LeadTimes | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const out: LeadTimes = {};
+  for (const [id, v] of Object.entries(raw as Record<string, unknown>).slice(0, 2000)) {
+    const o = (v ?? {}) as Partial<LeadTime>;
+    const unit = o.unit === "days" ? "days" : o.unit === "weeks" ? "weeks" : null;
+    const n = Math.round(Number(o.value));
+    const max = unit === "days" ? MAX_LEAD_DAYS : MAX_LEAD_WEEKS;
+    if (id && id.length <= 200 && unit && n >= 1 && n <= max) out[id] = { value: n, unit };
   }
   return Object.keys(out).length ? out : undefined;
 }

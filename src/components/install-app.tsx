@@ -4,9 +4,9 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 
 /*
  * "Add Shahi Lites to your home screen". Chrome's own install banner hides
- * itself after a few seconds, so the app keeps its own: a slim banner on
- * phones until the app is installed or the banner is closed, and an
- * "Add to home screen" item in the phone menu that brings it back.
+ * itself after a few seconds, so the app keeps its own: a slim banner until
+ * the app is installed or the banner is closed, and an "Add to home screen"
+ * item in the menu that brings it back.
  *
  *  - Android / Chrome: the Install button opens the browser's install dialog.
  *  - iPhone / Safari: there is no install dialog, so it shows the two taps.
@@ -117,7 +117,7 @@ export function InstallApp() {
   };
 
   return (
-    <div className="border-b border-gold/40 bg-gold-tint sm:hidden">
+    <div className="border-b border-gold/40 bg-gold-tint">
       <div className="mx-auto flex max-w-6xl items-start gap-3 px-5 py-2.5">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/icons/icon-192.png" alt="" className="h-9 w-9 shrink-0 rounded-lg" />

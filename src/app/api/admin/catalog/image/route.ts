@@ -10,11 +10,14 @@ const TYPES = new Set(["image/webp", "image/jpeg", "image/png"]);
 // are a few hundred KB. Stays under Vercel's 4.5 MB request cap.
 const MAX_BYTES = 4 * 1024 * 1024;
 
-/** Store one product photo (multipart field "file"); returns its public URL. */
+/**
+ * Store one product photo (multipart field "file"); returns its public URL.
+ * Any team member: employees add photos with the new products they add.
+ */
 export async function POST(req: Request) {
   const session = await getSession();
-  if (session?.role !== "superadmin") {
-    return NextResponse.json({ error: "Superadmin only." }, { status: 403 });
+  if (!session) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
   let file: FormDataEntryValue | null;
   try {

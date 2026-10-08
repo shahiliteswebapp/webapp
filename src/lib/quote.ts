@@ -12,7 +12,22 @@ import {
 } from "./catalog";
 import { QUOTE } from "./config";
 import { money0, round2 } from "./format";
-import { choiceFor, optionCountOf, type DraftRoom, type Discount, type QuoteDraft, type Warranty } from "./types";
+import {
+  choiceFor,
+  leadTimeLabel,
+  optionCountOf,
+  type DraftRoom,
+  type Discount,
+  type LeadTimes,
+  type QuoteDraft,
+  type Warranty,
+} from "./types";
+
+/** Per-light notes printed beside each light: warranty and lead time. */
+export interface LightNotes {
+  warranty?: Warranty;
+  leadTime?: LeadTimes;
+}
 
 /*
  * Pure pricing engine. No IO. Given the wizard's rooms, produce a fully costed
@@ -87,6 +102,8 @@ export interface ComputedLine {
   inherited: boolean;
   /** warranty in years, when one was set for this light */
   warrantyYears?: number;
+  /** delivery lead time, e.g. "3 weeks", when one was set for this light */
+  leadTime?: string;
 }
 
 export interface ComputedAccessory {
@@ -136,7 +153,7 @@ export interface ComputedQuote {
   grandTotal: number;
 }
 
-export function computeRoom(room: DraftRoom, opt = 0, warranty?: Warranty): ComputedRoom {
+export function computeRoom(room: DraftRoom, opt = 0, notes: LightNotes = {}): ComputedRoom {
   // Aggregate line quantities by system + variant + price (the same system can
   // be added on several lines; different automation variants stay separate).
   const groups = new Map<
@@ -181,7 +198,10 @@ export function computeRoom(room: DraftRoom, opt = 0, warranty?: Warranty): Comp
       clientName: label ? `${clientName(sys)} (${label})` : clientName(sys),
       dimensions: dimensionsOf(sys),
       inherited: choice.inherited,
-      warrantyYears: warranty?.[choice.systemId],
+      warrantyYears: notes.warranty?.[choice.systemId],
+      leadTime: notes.leadTime?.[choice.systemId]
+        ? leadTimeLabel(notes.leadTime[choice.systemId])
+        : undefined,
     });
     // Lines only merge when their discount matches too.
     const key = `${choice.systemId}|${label}|${unitCost}|${d ? `${d.kind}:${d.value}` : ""}`;
@@ -273,10 +293,11 @@ export function computeRoom(room: DraftRoom, opt = 0, warranty?: Warranty): Comp
 
 export function computeQuote(
   rooms: DraftRoom[],
-  opts: { applyGst?: boolean; discount?: Discount; option?: number; warranty?: Warranty } = {},
+  opts: { applyGst?: boolean; discount?: Discount; option?: number } & LightNotes = {},
 ): ComputedQuote {
   const applyGst = opts.applyGst !== false;
-  const computed = rooms.map((r) => computeRoom(r, opts.option ?? 0, opts.warranty));
+  const notes = { warranty: opts.warranty, leadTime: opts.leadTime };
+  const computed = rooms.map((r) => computeRoom(r, opts.option ?? 0, notes));
   const roomsTotal = round2(computed.reduce((s, r) => s + r.subtotal, 0));
   const discount = discountAmount(roomsTotal, opts.discount);
   const subtotal = round2(roomsTotal - discount);
@@ -304,7 +325,7 @@ export function computeQuote(
 
 /** Every option of a draft, priced: one ComputedQuote per option. */
 export function computeOptions(
-  draft: Pick<QuoteDraft, "rooms" | "applyGst" | "discount" | "optionCount" | "warranty">,
+  draft: Pick<QuoteDraft, "rooms" | "applyGst" | "discount" | "optionCount" | "warranty" | "leadTime">,
 ): ComputedQuote[] {
   return Array.from({ length: optionCountOf(draft) }, (_, option) =>
     computeQuote(draft.rooms, {
@@ -312,6 +333,7 @@ export function computeOptions(
       discount: draft.discount,
       option,
       warranty: draft.warranty,
+      leadTime: draft.leadTime,
     }),
   );
 }

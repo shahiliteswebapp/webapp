@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, ButtonLink, Card, Eyebrow } from "@/components/ui";
+import { ShareQuoteButton } from "@/components/share-quote-button";
 import { COMPANY, disclaimer } from "@/lib/config";
 import { fmtYmd } from "@/lib/format";
 
@@ -130,6 +131,15 @@ function SentInner() {
             Download {number}.pdf
           </a>
         ) : null}
+
+        {saved && (
+          <div className="flex items-center justify-between gap-3 rounded-md border border-hairline px-3 py-2">
+            <p className="text-xs text-muted">
+              Hand it to a teammate: they open the link and edit it, rooms and lights filled in.
+            </p>
+            <ShareQuoteButton number={number} label="Share link" className="shrink-0" />
+          </div>
+        )}
 
         <p className="rounded-md border border-gold/40 bg-gold-tint px-3 py-2 text-xs text-ink-deep">
           {disclaimer(applyGst, valid && /^\d{4}-\d{2}-\d{2}$/.test(valid) ? fmtYmd(valid) : undefined)}

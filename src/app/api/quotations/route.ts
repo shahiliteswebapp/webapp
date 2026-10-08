@@ -9,7 +9,8 @@ import { sendQuotationEmail } from "@/lib/email";
 import { renderQuotationPdf } from "@/lib/pdf/quotation-pdf";
 import { productPhotosForPdf } from "@/lib/pdf/product-images";
 import { loadCatalogChanges } from "@/lib/catalog-store";
-import { canEditQuotation, cleanWarranty, type ClientDetails, type Discount, type DraftRoom } from "@/lib/types";
+import { isValidShareKey } from "@/lib/share-link";
+import { canEditQuotation, cleanLeadTime, cleanWarranty, type ClientDetails, type Discount, type DraftRoom } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,8 +35,12 @@ interface Body {
   validUntil?: string;
   /** warranty in years per light (system id) */
   warranty?: Record<string, number>;
+  /** lead time per light (system id) */
+  leadTime?: Record<string, unknown>;
   /** set when saving an edit of an existing quotation (it gets a NEW number) */
   editOf?: string;
+  /** share-link key, when a teammate is editing someone else's quotation */
+  shareKey?: string;
   /** larger blueprint preview, saved so the quotation can be reopened */
   blueprintSaveDataUrl?: string;
   blueprintMeta?: { kind: "pdf" | "png"; width: number; height: number; pageCount: number };
@@ -80,11 +85,14 @@ export async function POST(req: Request) {
 
   // Editing: the quotation must exist, and this person must be allowed to edit it.
   const existing = body.editOf ? await getQuotation(body.editOf) : null;
+  let viaShare = false;
   if (body.editOf) {
     if (!existing) {
       return NextResponse.json({ error: "That quotation no longer exists." }, { status: 404 });
     }
-    if (!canEditQuotation(session, existing)) {
+    const own = canEditQuotation(session, existing);
+    viaShare = !own && isValidShareKey(existing.number, body.shareKey);
+    if (!own && !viaShare) {
       return NextResponse.json(
         { error: "You can only edit quotations you made." },
         { status: 403 },
@@ -101,12 +109,14 @@ export async function POST(req: Request) {
       ? { kind: body.discount.kind, value: Number(body.discount.value) }
       : undefined;
   const warranty = cleanWarranty(body.warranty);
+  const leadTime = cleanLeadTime(body.leadTime);
   const options = computeOptions({
     rooms,
     applyGst: body.applyGst !== false,
     discount,
     optionCount: body.optionCount,
     warranty,
+    leadTime,
   });
   const quote = options[0];
   if (options.some((q) => q.grandTotal <= 0)) {
@@ -136,10 +146,12 @@ export async function POST(req: Request) {
   // An edit is always a NEW quotation with its own number; the one it came
   // from stays exactly as it was. The edit stays with that quotation's
   // employee, so they keep seeing (and can keep editing) their work even when
-  // the superadmin made the change.
+  // the superadmin made the change. A teammate who opened a share link takes
+  // the quotation over: the new one is theirs.
+  const owner = existing && !viaShare ? existing : null;
   const record = await createQuotation({
-    employeeName: existing?.employeeName ?? session.name,
-    employeeEmail: existing?.employeeEmail ?? session.email,
+    employeeName: owner?.employeeName ?? session.name,
+    employeeEmail: owner?.employeeEmail ?? session.email,
     totalAmount: quote.grandTotal,
     status,
     clientName: client.name,
@@ -157,6 +169,7 @@ export async function POST(req: Request) {
     client,
     validUntil,
     warranty,
+    leadTime,
     noBlueprint: !body.blueprintSaveDataUrl,
   };
 

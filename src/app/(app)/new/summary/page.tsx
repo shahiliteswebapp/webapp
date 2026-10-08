@@ -25,8 +25,11 @@ export default function SummaryPage() {
     setQuoteDiscount,
     setOptionCount,
     setWarranty,
+    setLeadTime,
   } = useDraft();
   const [newRoom, setNewRoom] = useState("");
+  // The blueprint opens only when asked for.
+  const [showBlueprint, setShowBlueprint] = useState(false);
 
   useEffect(() => {
     if (!loaded) return;
@@ -63,11 +66,13 @@ export default function SummaryPage() {
       <div
         className={cx(
           "grid min-w-0 gap-5",
-          draft.blueprint ? "lg:grid-cols-[minmax(0,1fr)_440px]" : "mx-auto max-w-xl",
+          draft.blueprint && showBlueprint
+            ? "lg:grid-cols-[minmax(0,1fr)_440px]"
+            : "mx-auto w-full max-w-xl",
         )}
       >
-        {/* Blueprint */}
-        {draft.blueprint && (
+        {/* Blueprint, while open */}
+        {draft.blueprint && showBlueprint && (
           <div className="h-[45vh] min-w-0 lg:sticky lg:top-24 lg:h-[calc(100dvh-14rem)]">
             <BlueprintViewer
               src={draft.blueprint.previewDataUrl}
@@ -84,7 +89,24 @@ export default function SummaryPage() {
                 ? `${options.length} options, each priced in full.`
                 : "Offer the client up to 3 options."}
             </p>
-            <OptionCountControl value={options.length} onChange={setOptionCount} />
+            <span className="flex items-center gap-2">
+              {draft.blueprint && (
+                <button
+                  type="button"
+                  onClick={() => setShowBlueprint((v) => !v)}
+                  aria-pressed={showBlueprint}
+                  className={cx(
+                    "inline-flex h-9 items-center rounded-full border px-3 text-xs font-medium",
+                    showBlueprint
+                      ? "border-gold bg-gold-tint text-ink-deep"
+                      : "border-hairline text-muted hover:border-gold hover:text-ink",
+                  )}
+                >
+                  {showBlueprint ? "Hide blueprint" : "Blueprint"}
+                </button>
+              )}
+              <OptionCountControl value={options.length} onChange={setOptionCount} />
+            </span>
           </div>
           <div className="space-y-3">
             {quote.rooms.map((room, i) => (
@@ -220,6 +242,8 @@ export default function SummaryPage() {
             lights={quotedLights(draft)}
             warranty={draft.warranty}
             onChange={setWarranty}
+            leadTime={draft.leadTime}
+            onLeadTimeChange={setLeadTime}
           />
 
           {/* Totals */}

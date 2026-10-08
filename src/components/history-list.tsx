@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { zipSync } from "fflate";
 import { Button, StatusBadge } from "@/components/ui";
+import { ShareQuoteButton } from "@/components/share-quote-button";
 import { fmtDateTime, money } from "@/lib/format";
 import { cx } from "@/lib/cx";
 import type { QuotationRecord } from "@/lib/types";
@@ -33,6 +34,7 @@ function QuoteActions({ q, saved }: { q: QuotationRecord; saved: boolean }) {
       >
         PDF
       </a>
+      <ShareQuoteButton number={q.number} />
       <Link
         href={`/new/edit/${n}`}
         className="inline-flex h-8 items-center rounded-full bg-gold px-3 text-xs font-medium text-paper hover:opacity-90"

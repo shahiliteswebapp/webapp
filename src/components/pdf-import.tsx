@@ -61,6 +61,7 @@ export function PdfImport({ onWarnings }: { onWarnings: (w: string[]) => void })
         client: d.client,
         validUntil: d.validUntil,
         warranty: d.warranty,
+        leadTime: d.leadTime,
         editOf: data.editOf,
         noBlueprint: true,
       };

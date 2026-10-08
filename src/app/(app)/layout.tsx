@@ -11,7 +11,14 @@ export default async function AppGroupLayout({
   const [session, changes] = await Promise.all([requireSession(), loadCatalogChanges()]);
   return (
     <AppShell session={session}>
-      <CatalogHydrator items={changes.items} removed={changes.removed}>{children}</CatalogHydrator>
+      <CatalogHydrator
+        changes={{
+          items: changes.items,
+          removed: changes.removed,
+          edits: changes.edits,
+          popular: changes.popular,
+        }}
+      >{children}</CatalogHydrator>
     </AppShell>
   );
 }

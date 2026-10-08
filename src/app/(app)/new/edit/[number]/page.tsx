@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Button, ButtonLink, Card, Eyebrow } from "@/components/ui";
 import { useDraft } from "@/lib/draft/context";
@@ -21,6 +21,8 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
 export default function EditQuotationPage() {
   const { number } = useParams<{ number: string }>();
   const router = useRouter();
+  // Opened from a teammate's share link.
+  const share = useSearchParams().get("share");
   const { loaded, draft, loadDraft } = useDraft();
   const [error, setError] = useState<string | null>(null);
   // Made before saving existed: offer to rebuild it (as a new quotation).
@@ -33,7 +35,8 @@ export default function EditQuotationPage() {
     started.current = true;
     setConfirmReplace(false);
     try {
-      const res = await fetch(`/api/quotations/${encodeURIComponent(number)}/draft`, {
+      const qs = share ? `?share=${encodeURIComponent(share)}` : "";
+      const res = await fetch(`/api/quotations/${encodeURIComponent(number)}/draft${qs}`, {
         cache: "no-store",
       });
       const data = (await res.json()) as {
@@ -64,7 +67,9 @@ export default function EditQuotationPage() {
         // Keep the chosen date while it is still ahead; else back to 60 days.
         validUntil: isValidValidUntil(saved.validUntil) ? saved.validUntil : undefined,
         warranty: saved.warranty,
+        leadTime: saved.leadTime,
         editOf: number,
+        shareKey: share ?? undefined,
         noBlueprint: !saved.blueprint || !data.blueprintDataUrl,
       };
       if (saved.blueprint && data.blueprintDataUrl) {

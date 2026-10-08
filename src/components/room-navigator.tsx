@@ -56,6 +56,7 @@ export function RoomNavigator({
   activeLineId,
   onSelectLine,
   onAddLine,
+  onAddRoom,
 }: {
   rooms: DraftRoom[];
   currentRoomId: string;
@@ -63,7 +64,11 @@ export function RoomNavigator({
   /** jump to a light; `roomId` may be another room */
   onSelectLine: (roomId: string, lineId: string) => void;
   onAddLine: () => void;
+  /** add a room and open it */
+  onAddRoom: (name: string) => void;
 }) {
+  const [newRoom, setNewRoom] = useState("");
+  const [adding, setAdding] = useState(false);
   // Other rooms the employee opened to peek at; the current room is always open.
   const [open, setOpen] = useState<Set<string>>(new Set());
   const toggle = (id: string) =>
@@ -168,6 +173,45 @@ export function RoomNavigator({
           );
         })}
       </ul>
+      {adding ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!newRoom.trim()) return;
+            onAddRoom(newRoom);
+            setNewRoom("");
+            setAdding(false);
+          }}
+          className="flex items-center gap-1.5 px-1 pt-1"
+        >
+          <input
+            autoFocus
+            value={newRoom}
+            onChange={(e) => setNewRoom(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setAdding(false);
+            }}
+            placeholder="Room name"
+            aria-label="New room name"
+            className="min-w-0 flex-1 rounded-md border border-hairline bg-paper px-2 py-1.5 text-base outline-none focus:border-gold sm:text-sm"
+          />
+          <button
+            type="submit"
+            disabled={!newRoom.trim()}
+            className="shrink-0 rounded-full bg-gold px-3 py-1.5 text-xs font-medium text-paper disabled:opacity-40"
+          >
+            Add
+          </button>
+        </form>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="block w-full rounded-md px-2 py-1.5 text-left text-xs font-medium text-gold-deep hover:bg-gold-tint/60"
+        >
+          + Add room
+        </button>
+      )}
       <Link
         href="/new/rooms"
         className="block px-2 pt-1 text-xs text-muted hover:text-ink"

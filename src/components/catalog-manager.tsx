@@ -1,21 +1,25 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button, Eyebrow } from "@/components/ui";
+import { CatalogQuickAdd, type QuickAddMode } from "@/components/catalog-quick-add";
 import {
-  BUILTIN_SYSTEMS,
   UNIT_LABEL,
+  mergeCatalog,
   systemImages,
+  type CatalogDelta,
   type LightingSystem,
 } from "@/lib/catalog";
 import { money } from "@/lib/format";
 import { cx } from "@/lib/cx";
 
 /*
- * Superadmin tool to take any product out of the picker, built-in or
- * uploaded. Built-in items are only hidden (and can be restored); uploaded
- * items are deleted. Quotations already in progress still price removed items.
+ * Superadmin tool for every product, built-in or uploaded: edit it, duplicate
+ * it (a quick start for a variant), mark it popular (listed first, with a
+ * badge, in the picker), or take it out of the picker. Built-in items are
+ * only hidden (and can be restored); uploaded items are deleted. Quotations
+ * already in progress still price removed items.
  */
 
 const MAX_SHOWN = 60;
@@ -52,31 +56,51 @@ function Thumb({ sys }: { sys: LightingSystem }) {
   );
 }
 
-export function CatalogManager({
-  uploaded,
-  removed,
-}: {
-  uploaded: LightingSystem[];
-  removed: string[];
-}) {
+function StarIcon({ on }: { on: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden>
+      <path
+        d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"
+        fill={on ? "currentColor" : "none"}
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function CatalogManager({ changes }: { changes: Required<CatalogDelta> }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [kind, setKind] = useState<"all" | "functional" | "decorative">("all");
+  const [kind, setKind] = useState<"all" | "functional" | "decorative" | "popular">("all");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  // The product open in the edit / duplicate form.
+  const [open, setOpen] = useState<{ sys: LightingSystem; mode: QuickAddMode } | null>(null);
+  const formRef = useRef<HTMLDivElement>(null);
 
-  const removedSet = useMemo(() => new Set(removed), [removed]);
-  const all = useMemo(
-    () => [...BUILTIN_SYSTEMS, ...uploaded.map((u) => ({ ...u, uploaded: true }) as LightingSystem)],
-    [uploaded],
-  );
+  const removedSet = useMemo(() => new Set(changes.removed), [changes.removed]);
+  const all = useMemo(() => mergeCatalog(changes), [changes]);
   const active = all.filter((s) => !removedSet.has(s.id));
-  const removedItems = BUILTIN_SYSTEMS.filter((s) => removedSet.has(s.id));
+  const removedItems = all.filter((s) => !s.uploaded && removedSet.has(s.id));
 
   const q = query.trim().toLowerCase();
-  const matches = active.filter(
-    (s) => (kind === "all" || s.kind === kind) && (!q || haystack(s).includes(q)),
-  );
+  const matches = active
+    .filter(
+      (s) =>
+        (kind === "all" || (kind === "popular" ? s.popular : s.kind === kind)) &&
+        (!q || haystack(s).includes(q)),
+    )
+    // Popular products first; the rest keep catalogue order.
+    .sort((a, b) => Number(!!b.popular) - Number(!!a.popular));
+
+  const openForm = (sys: LightingSystem, mode: QuickAddMode) => {
+    setNotice(null);
+    setOpen({ sys, mode });
+    requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
 
   const call = async (id: string, method: "PATCH" | "DELETE", body: object) => {
     setBusy(id);
@@ -110,10 +134,34 @@ export function CatalogManager({
       <div>
         <Eyebrow>All products</Eyebrow>
         <p className="text-sm text-muted">
-          Remove any product so employees can no longer pick it. Built-in products can be
-          restored below; uploaded products are deleted.
+          Edit or duplicate any product, or mark the common choices as popular (star) so
+          employees see them first. Remove a product so it can no longer be picked: built-in
+          products can be restored below; uploaded products are deleted.
         </p>
       </div>
+
+      {open && (
+        <div
+          ref={formRef}
+          className="scroll-mt-20 rounded-[var(--radius-card)] border border-gold/50 bg-gold-tint/20 p-4"
+        >
+          <CatalogQuickAdd
+            key={`${open.mode}-${open.sys.id}`}
+            initial={open.sys}
+            mode={open.mode}
+            onCancel={() => setOpen(null)}
+            onDone={(message) => {
+              setOpen(null);
+              setNotice(message);
+            }}
+          />
+        </div>
+      )}
+      {notice && (
+        <p className="rounded-md border border-gold/40 bg-gold-tint px-3 py-2 text-sm text-ink-deep">
+          {notice}
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <input
@@ -124,7 +172,7 @@ export function CatalogManager({
           className="min-w-0 flex-1 rounded-md border border-hairline bg-paper px-3 py-2 text-sm outline-none focus:border-gold"
         />
         <div className="flex overflow-hidden rounded-md border border-hairline text-xs font-medium">
-          {(["all", "functional", "decorative"] as const).map((k) => (
+          {(["all", "functional", "decorative", "popular"] as const).map((k) => (
             <button
               key={k}
               type="button"
@@ -153,26 +201,61 @@ export function CatalogManager({
 
       <ul className="divide-y divide-hairline rounded-[var(--radius-card)] border border-hairline">
         {matches.slice(0, MAX_SHOWN).map((s) => (
-          <li key={s.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+          <li key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
+            <button
+              type="button"
+              disabled={busy !== null}
+              aria-pressed={!!s.popular}
+              aria-label={s.popular ? `Unmark ${s.name} as popular` : `Mark ${s.name} as popular`}
+              title={s.popular ? "Popular. Click to unmark." : "Mark as popular"}
+              onClick={() =>
+                void call(s.id, "PATCH", s.popular ? { unpopular: [s.id] } : { popular: [s.id] })
+              }
+              className={cx(
+                "grid h-8 w-8 shrink-0 place-items-center rounded-full disabled:opacity-50",
+                s.popular ? "text-gold hover:bg-gold-tint" : "text-faint hover:bg-panel hover:text-gold",
+              )}
+            >
+              <StarIcon on={!!s.popular} />
+            </button>
             <Thumb sys={s} />
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 basis-40">
               <p className="truncate text-ink">{s.name}</p>
               <p className="truncate text-xs text-faint">
                 {s.kind === "functional" ? "Functional" : "Decorative"} · {s.sourceCode}
-                {s.uploaded ? " · uploaded" : ""}
+                {s.uploaded ? ` · added${s.addedBy ? ` by ${s.addedBy}` : ""}` : ""}
+                {s.edited ? " · edited" : ""}
               </p>
             </div>
             <span className="hidden shrink-0 tabular-nums text-muted sm:inline">
               {s.unitCost > 0 ? `${money(s.unitCost)}/${UNIT_LABEL[s.unit]}` : "No price"}
             </span>
-            <button
-              type="button"
-              disabled={busy !== null}
-              onClick={() => remove(s)}
-              className="shrink-0 rounded-full px-2 py-1 text-xs text-muted hover:bg-rejected/5 hover:text-rejected disabled:opacity-50"
-            >
-              {busy === s.id ? "Removing…" : "Remove"}
-            </button>
+            <span className="ml-auto flex shrink-0 items-center">
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => openForm(s, "edit")}
+                className="rounded-full px-2 py-1 text-xs font-medium text-gold-deep hover:bg-gold-tint disabled:opacity-50"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => openForm(s, "duplicate")}
+                className="rounded-full px-2 py-1 text-xs text-muted hover:bg-panel hover:text-ink disabled:opacity-50"
+              >
+                Duplicate
+              </button>
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => remove(s)}
+                className="rounded-full px-2 py-1 text-xs text-muted hover:bg-rejected/5 hover:text-rejected disabled:opacity-50"
+              >
+                {busy === s.id ? "Working…" : "Remove"}
+              </button>
+            </span>
           </li>
         ))}
         {matches.length === 0 && (

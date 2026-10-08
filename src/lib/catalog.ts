@@ -85,6 +85,13 @@ interface BaseSystem {
   company?: string | null;
   /** Shahi Lites' own product code, when one is set (see skuOf) */
   slSku?: string | null;
+  /** marked by the superadmin as a common choice; listed first in the picker */
+  popular?: boolean;
+  /** uploaded items: who added it (email), and when */
+  addedBy?: string;
+  addedAt?: string;
+  /** built-in items a superadmin edited in the app */
+  edited?: boolean;
 }
 
 export interface FunctionalSystem extends BaseSystem {
@@ -185,29 +192,64 @@ export const ACCESSORIES: Accessory[] = [
 const SYSTEM_BY_ID = new Map(LIGHTING_SYSTEMS.map((s) => [s.id, s]));
 let changesKey = "";
 
+/** What the superadmin (and employees adding products) changed in the catalogue. */
+export interface CatalogDelta {
+  /** products added in the app or from Excel */
+  items: LightingSystem[];
+  /** ids taken out of the picker */
+  removed?: string[];
+  /** built-in products edited in the app (whole product, same id) */
+  edits?: LightingSystem[];
+  /** ids marked as popular */
+  popular?: string[];
+}
+
 /**
- * Apply the superadmin's catalogue changes: uploaded items are added (a
- * repeat call replaces the earlier set) and removed ids drop out of the
- * pickable list. Idempotent. Called on the server before pricing, and in
- * the browser by <CatalogHydrator> before any page renders.
+ * The built-in catalogue with the superadmin's edits and popular marks, plus
+ * every uploaded product. Pure; used by applyCatalogChanges and the admin page.
  */
-export function applyCatalogChanges(items: LightingSystem[], removed: string[] = []): void {
-  const key =
-    items.map((i) => `${i.id}:${i.unitCost}:${(i.images ?? []).length}`).join("|") +
-    "#" +
-    [...removed].sort().join("|");
+export function mergeCatalog(delta: CatalogDelta): LightingSystem[] {
+  const popular = new Set(delta.popular ?? []);
+  const edits = new Map((delta.edits ?? []).map((e) => [e.id, e]));
+  const mark = (s: LightingSystem): LightingSystem =>
+    popular.has(s.id) ? { ...s, popular: true } : s.popular ? { ...s, popular: false } : s;
+  const builtin = BUILTIN_SYSTEMS.map((s) => {
+    const e = edits.get(s.id);
+    // An edit keeps the product's id, kind and Shahi Lites SKU.
+    return mark(
+      e
+        ? withListPrice({ ...e, id: s.id, kind: s.kind, slSku: s.slSku, uploaded: false, edited: true } as LightingSystem)
+        : s,
+    );
+  });
+  const uploaded = delta.items.map((item) => mark({ ...item, uploaded: true } as LightingSystem));
+  return [...builtin, ...uploaded];
+}
+
+/**
+ * Apply the catalogue changes: uploaded items are added (a repeat call
+ * replaces the earlier set), edits replace built-in products, popular marks
+ * are set, and removed ids drop out of the pickable list. Idempotent. Called
+ * on the server before pricing, and in the browser by <CatalogHydrator>
+ * before any page renders.
+ */
+export function applyCatalogChanges(delta: CatalogDelta): void {
+  const key = JSON.stringify([
+    delta.items,
+    [...(delta.removed ?? [])].sort(),
+    delta.edits ?? [],
+    [...(delta.popular ?? [])].sort(),
+  ]);
   if (key === changesKey) return;
   changesKey = key;
 
+  const all = mergeCatalog(delta);
   for (const [id, sys] of SYSTEM_BY_ID) if (sys.uploaded) SYSTEM_BY_ID.delete(id);
-  const uploaded = items.map((item) => ({ ...item, uploaded: true }) as LightingSystem);
-  for (const sys of uploaded) SYSTEM_BY_ID.set(sys.id, sys);
+  for (const sys of all) SYSTEM_BY_ID.set(sys.id, sys);
 
-  const gone = new Set(removed);
+  const gone = new Set(delta.removed ?? []);
   LIGHTING_SYSTEMS.length = 0;
-  for (const sys of [...BUILTIN_SYSTEMS, ...uploaded]) {
-    if (!gone.has(sys.id)) LIGHTING_SYSTEMS.push(sys);
-  }
+  for (const sys of all) if (!gone.has(sys.id)) LIGHTING_SYSTEMS.push(sys);
 }
 
 const ACCESSORY_BY_ID = new Map(ACCESSORIES.map((a) => [a.id, a]));
@@ -247,13 +289,23 @@ export function systemImages(sys: LightingSystem): string[] {
 }
 
 /**
- * Unit price for one line: the chosen automation variant's price when it has
- * one, else the catalogue price, else (unpriced decorative items only) the
- * rate the employee typed in.
+ * Unit price for one line: the rate the employee typed in for this quotation
+ * when there is one (special pricing, or an item with no catalogue price),
+ * else the chosen automation variant's price, else the catalogue price.
  */
 export function unitPriceFor(
   sys: LightingSystem,
   pick: { interfaceTag?: InterfaceTag; control?: ControlMode; unitPrice?: number },
+): number {
+  const typed = Number(pick.unitPrice);
+  if (Number.isFinite(typed) && typed > 0) return typed;
+  return catalogPriceFor(sys, pick);
+}
+
+/** The catalogue's own unit price for a pick (no typed-in rate); 0 when unpriced. */
+export function catalogPriceFor(
+  sys: LightingSystem,
+  pick: { interfaceTag?: InterfaceTag; control?: ControlMode },
 ): number {
   if (pick.interfaceTag || pick.control) {
     const match = sys.interfaceOptions.find(
@@ -263,9 +315,7 @@ export function unitPriceFor(
     );
     if (match?.price != null) return match.price;
   }
-  if (sys.unitCost > 0) return sys.unitCost;
-  const manual = Number(pick.unitPrice);
-  return Number.isFinite(manual) && manual > 0 ? manual : 0;
+  return sys.unitCost > 0 ? sys.unitCost : 0;
 }
 
 export function variantLabel(pick: { interfaceTag?: InterfaceTag; control?: ControlMode }): string {

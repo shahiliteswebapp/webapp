@@ -363,13 +363,13 @@ function Spec({ line }: { line: Pick<ComputedLine, "sku" | "dimensions"> }) {
   return parts.length ? <Text style={s.lightSpec}>{parts.join("  ·  ")}</Text> : null;
 }
 
-/** "Warranty 2 years", when the light has one. */
-function WarrantyNote({ years }: { years?: number }) {
-  return years ? (
-    <Text style={s.warranty}>
-      Warranty {years} year{years === 1 ? "" : "s"}
-    </Text>
-  ) : null;
+/** "Warranty 2 years  ·  Lead time 3 weeks", for whichever the light has. */
+function WarrantyNote({ years, leadTime }: { years?: number; leadTime?: string }) {
+  const parts = [
+    years ? `Warranty ${years} year${years === 1 ? "" : "s"}` : "",
+    leadTime ? `Lead time ${leadTime}` : "",
+  ].filter(Boolean);
+  return parts.length ? <Text style={s.warranty}>{parts.join("  ·  ")}</Text> : null;
 }
 
 /* ------------------------------ room lights ------------------------------ */
@@ -405,7 +405,7 @@ function SingleOptionLights({ room, photos }: { room: ComputedRoom; photos: Reco
             <Text style={s.lightIndex}>LIGHT {i + 1}</Text>
             <Text style={s.lightName}>{l.clientName}</Text>
             <Spec line={l} />
-            <WarrantyNote years={l.warrantyYears} />
+            <WarrantyNote years={l.warrantyYears} leadTime={l.leadTime} />
             <Text style={s.lightMeta}>
               {l.qty} {l.unitLabel} × {rs(l.unitCost)}
               {l.discount > 0 ? `  ·  Discount ${l.discountLabel} (−${rs(l.discount)})` : ""}
@@ -449,7 +449,7 @@ function MultiOptionLights({ rooms, photos }: { rooms: ComputedRoom[]; photos: R
                       <Text style={s.optName}>{c.clientName}</Text>
                       {c.inherited && <Text style={s.optNote}>Same as Option 1</Text>}
                       <Spec line={c} />
-                      <WarrantyNote years={c.warrantyYears} />
+                      <WarrantyNote years={c.warrantyYears} leadTime={c.leadTime} />
                       <Text style={s.lightMeta}>
                         {c.qty} {c.unitLabel} × {rs(c.unitCost)}
                       </Text>

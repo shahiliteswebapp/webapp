@@ -5,13 +5,28 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { signOutAction } from "@/lib/actions/auth";
 import { cx } from "@/lib/cx";
-import { MENU_ITEMS, SUPERADMIN_MENU_ITEMS } from "./plus-widget";
 import { SHOW_INSTALL_EVENT } from "./install-app";
 
+export const MENU_ITEMS = [
+  { href: "/new", label: "Start New", desc: "Build a quotation" },
+  { href: "/history", label: "History", desc: "Past quotations" },
+  { href: "/dashboard", label: "Dashboard", desc: "Overview" },
+];
+
+/* Employees can add new products, but not change or remove existing ones. */
+export const EMPLOYEE_MENU_ITEMS = [
+  { href: "/catalog/add", label: "Add a product", desc: "New arrivals for the catalogue" },
+];
+
+export const SUPERADMIN_MENU_ITEMS = [
+  { href: "/review", label: "Review queue", desc: "Approve or reject" },
+  { href: "/admin", label: "Access", desc: "Add or remove Gmail IDs" },
+  { href: "/admin/catalog", label: "Catalogue", desc: "Add, edit, duplicate, remove products" },
+];
+
 /*
- * Phones only: the menu sits top right in the header (where Sign out is on
- * larger screens), and Sign out lives inside it. Laptops and tablets keep the
- * floating "+" menu.
+ * The one app menu, top right in the header on every screen size: pages,
+ * "Add to home screen", and Sign out.
  */
 export function HeaderMenu({
   name,
@@ -25,7 +40,9 @@ export function HeaderMenu({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
-  const items = isSuperadmin ? [...MENU_ITEMS, ...SUPERADMIN_MENU_ITEMS] : MENU_ITEMS;
+  const items = isSuperadmin
+    ? [...MENU_ITEMS, ...SUPERADMIN_MENU_ITEMS]
+    : [...MENU_ITEMS, ...EMPLOYEE_MENU_ITEMS];
 
   // Close on route change (reset during render, not in an effect).
   const [openedAt, setOpenedAt] = useState(pathname);
@@ -51,7 +68,7 @@ export function HeaderMenu({
   }, [open]);
 
   return (
-    <div ref={rootRef} className="relative sm:hidden">
+    <div ref={rootRef} className="relative">
       <button
         type="button"
         aria-label={open ? "Close menu" : "Open menu"}

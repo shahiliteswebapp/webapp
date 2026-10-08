@@ -10,7 +10,7 @@ export const metadata = { title: "Catalogue · Shahi Lites" };
 
 export default async function CatalogAdminPage() {
   await requireSuperadmin();
-  const { items, removed } = await loadCatalogChanges({ fresh: true });
+  const { items, removed, edits, popular } = await loadCatalogChanges({ fresh: true });
 
   return (
     <div className="space-y-6">
@@ -37,7 +37,7 @@ export default async function CatalogAdminPage() {
           <CatalogUploader existing={items} />
         </div>
       </details>
-      <CatalogManager uploaded={items} removed={removed} />
+      <CatalogManager changes={{ items, removed, edits, popular }} />
     </div>
   );
 }

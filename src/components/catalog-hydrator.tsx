@@ -1,21 +1,19 @@
 "use client";
 
-import { applyCatalogChanges, type LightingSystem } from "@/lib/catalog";
+import { applyCatalogChanges, type CatalogDelta } from "@/lib/catalog";
 
 /*
- * Applies the superadmin's catalogue changes (uploaded items, removed items)
+ * Applies the catalogue changes (uploaded, edited, popular and removed items)
  * to the browser's copy of the catalogue. Runs during render, before any
  * child page reads the catalogue.
  */
 export function CatalogHydrator({
-  items,
-  removed,
+  changes,
   children,
 }: {
-  items: LightingSystem[];
-  removed: string[];
+  changes: CatalogDelta;
   children: React.ReactNode;
 }) {
-  applyCatalogChanges(items, removed);
+  applyCatalogChanges(changes);
   return children;
 }

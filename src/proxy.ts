@@ -35,7 +35,11 @@ export function proxy(request: NextRequest) {
   }
 
   if (!hasSession) {
-    return NextResponse.redirect(new URL("/sign-in", request.url));
+    // Come back to this page after signing in (e.g. a shared quotation link).
+    const to = new URL("/sign-in", request.url);
+    const back = pathname + request.nextUrl.search;
+    if (pathname !== "/" && pathname !== "/dashboard") to.searchParams.set("next", back);
+    return NextResponse.redirect(to);
   }
 
   return NextResponse.next();

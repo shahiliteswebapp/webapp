@@ -1,5 +1,5 @@
-import { allSystems, type ControlMode, type LightingSystem } from "./catalog";
-import type { ClientDetails, Discount, DraftRoom, LineChoice, RoomLine, Warranty } from "./types";
+import { allSystems, catalogPriceFor, type ControlMode, type LightingSystem } from "./catalog";
+import type { ClientDetails, Discount, DraftRoom, LeadTimes, LineChoice, RoomLine, Warranty } from "./types";
 
 /*
  * Reads a Shahi Lites quotation PDF back into an editable draft, for PDFs
@@ -32,6 +32,8 @@ export interface ImportedDraft {
   validUntil?: string;
   /** warranty in years per light (system id) */
   warranty?: Warranty;
+  /** delivery lead time per light (system id) */
+  leadTime?: LeadTimes;
   /** things the reader could not match, for the person to fix */
   warnings: string[];
 }
@@ -206,8 +208,8 @@ export function readQuotationPdf(pages: TextItem[][]): ImportedDraft {
       choice.control = v.control;
       choice.interfaceTag = v.interfaceTag ?? (v.control === "tunable" ? "TUNABLE" : "DIMMABLE");
     }
-    // Keep a typed-in rate for items the catalogue has no price for.
-    if (sys.unitCost <= 0 && cell.rate) choice.unitPrice = cell.rate;
+    // Keep a typed-in rate: an item with no catalogue price, or special pricing.
+    if (cell.rate && cell.rate !== catalogPriceFor(sys, choice)) choice.unitPrice = cell.rate;
     return choice;
   };
 

@@ -8,6 +8,7 @@ import {
   DECOR_STYLES,
   DECOR_TYPES,
   LAYER_LABEL,
+  catalogImageUrl,
   type DecorativeSystem,
   type FunctionalSystem,
   type InterfaceOption,
@@ -20,7 +21,8 @@ import { cx } from "@/lib/cx";
 /*
  * Add one product at a time, from a phone or a laptop: type the details,
  * take or pick a few photos, save. The Excel upload stays available for
- * big batches.
+ * big batches. Employees use it to add new arrivals; the superadmin also
+ * uses it to edit or duplicate an existing product (`initial` + `mode`).
  */
 
 const MAX_PHOTOS = 6;
@@ -98,6 +100,87 @@ const EMPTY: Form = {
   styles: [],
   material: "",
 };
+
+/** The form, filled in from an existing product (to edit or duplicate it). */
+function formFromItem(s: LightingSystem): Form {
+  const common = {
+    ...EMPTY,
+    kind: s.kind,
+    name: s.name,
+    code: s.sourceCode === s.name ? "" : s.sourceCode,
+    company: s.company ?? "",
+    price: s.unitCost > 0 ? String(s.unitCost) : "",
+    unit: s.unit,
+    size: s.size ?? "",
+    finish: s.finish ?? "",
+  };
+  if (s.kind === "functional") {
+    const controls = new Set(s.interfaceOptions.map((io) => io.control));
+    return {
+      ...common,
+      watts: s.wattNum ? String(s.wattNum) : (s.watt ?? ""),
+      category: s.category === "Functional" ? "" : s.category,
+      layer: s.layer ? String(s.layer) : "",
+      glare: s.glare ?? "",
+      automatic: s.automatic,
+      control: controls.has("tunable") && !controls.has("dimmable") ? "tunable" : "dimmable",
+      interfaces: [
+        ...new Set(
+          s.interfaceOptions
+            .map((io) => io.interface)
+            .filter((i) => i !== "DIMMABLE" && i !== "TUNABLE"),
+        ),
+      ],
+      cutout: s.cutout ?? "",
+      colour: s.colour ?? "",
+      ip: s.ipRating ?? "",
+    };
+  }
+  return {
+    ...common,
+    watts: s.lamp ?? "",
+    code: s.sku ?? common.code,
+    decorType: s.decorType || DECOR_TYPES[0],
+    mounting: (s.mountingTags ?? []).join(", ") || (s.mounting ?? ""),
+    styles: s.styleTags ?? [],
+    material: s.material ?? "",
+  };
+}
+
+/** Same automation choices as the product had, so its variant prices are kept. */
+function sameAutomation(f: Form, s: LightingSystem): boolean {
+  const before = formFromItem(s);
+  return (
+    f.kind === s.kind &&
+    f.automatic === before.automatic &&
+    f.control === before.control &&
+    [...f.interfaces].sort().join() === [...before.interfaces].sort().join()
+  );
+}
+
+/** An edited product: the form's fields over everything the form does not show. */
+function mergeEdit(initial: LightingSystem, f: Form, built: LightingSystem): LightingSystem {
+  const merged = {
+    ...initial,
+    ...built,
+    id: initial.id,
+    source: initial.source,
+    rules: initial.rules,
+    // Variant prices (from the catalogue) stay unless the automation changed.
+    interfaceOptions: sameAutomation(f, initial) ? initial.interfaceOptions : built.interfaceOptions,
+  } as LightingSystem;
+  if (initial.kind === "decorative" && merged.kind === "decorative") {
+    merged.indoorOutdoor = initial.indoorOutdoor;
+    merged.catalogPage = initial.catalogPage;
+    // A typed price replaces the catalogue's list number.
+    merged.listNumber = merged.unitCost > 0 ? null : initial.listNumber;
+  }
+  if (initial.kind === "functional" && merged.kind === "functional") {
+    merged.finishOptions = initial.finishOptions;
+    merged.ledSource = initial.ledSource;
+  }
+  return merged;
+}
 
 function buildItem(f: Form, images: string[]): LightingSystem {
   const price = parseFloat(f.price);
@@ -185,9 +268,32 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
   );
 }
 
-export function CatalogQuickAdd() {
+export type QuickAddMode = "add" | "edit" | "duplicate";
+
+export function CatalogQuickAdd({
+  initial,
+  mode = "add",
+  onDone,
+  onCancel,
+}: {
+  /** product to edit or duplicate */
+  initial?: LightingSystem;
+  mode?: QuickAddMode;
+  /** called after a save instead of clearing the form for the next product */
+  onDone?: (message: string) => void;
+  onCancel?: () => void;
+} = {}) {
   const router = useRouter();
-  const [f, setF] = useState<Form>(EMPTY);
+  const [f, setF] = useState<Form>(() =>
+    initial
+      ? {
+          ...formFromItem(initial),
+          name: mode === "duplicate" ? `${initial.name} (copy)` : initial.name,
+        }
+      : EMPTY,
+  );
+  // Photos the product already has (stored file names or URLs), kept unless removed.
+  const [kept, setKept] = useState<string[]>(() => initial?.images ?? []);
   const [photos, setPhotos] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -208,8 +314,9 @@ export function CatalogQuickAdd() {
   const addPhotos = (list: FileList | null) => {
     if (!list) return;
     const files = [...list].filter((x) => x.type.startsWith("image/"));
-    setPhotos((prev) => [...prev, ...files].slice(0, MAX_PHOTOS));
+    setPhotos((prev) => [...prev, ...files].slice(0, Math.max(0, MAX_PHOTOS - kept.length)));
   };
+  const photoCount = kept.length + photos.length;
 
   const save = async () => {
     setError(null);
@@ -222,23 +329,45 @@ export function CatalogQuickAdd() {
     try {
       const urls: string[] = [];
       for (const p of photos) urls.push(await uploadPhoto(p));
-      const item = buildItem(f, urls);
+      const built = buildItem(f, [...kept, ...urls]);
+      const editing = mode === "edit" && initial ? initial : null;
+      const item = editing
+        ? mergeEdit(editing, f, built)
+        : mode === "duplicate" && initial
+          ? // A copy keeps what the form does not show too, as a new product.
+            ({
+              ...mergeEdit(initial, f, built),
+              id: built.id,
+              source: built.source,
+              slSku: null,
+              uploaded: true,
+              edited: undefined,
+              addedBy: undefined,
+              addedAt: undefined,
+            } as LightingSystem)
+          : built;
       const res = await fetch("/api/admin/catalog", {
-        method: "POST",
+        method: editing ? "PUT" : "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ items: [item] }),
+        body: JSON.stringify(editing ? { item } : { items: [item] }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? `Save failed (${res.status})`);
-      setDone(
-        `Added "${item.name}"${
-          urls.length ? ` with ${urls.length} photo${urls.length === 1 ? "" : "s"}` : ""
-        }.`,
-      );
+      const message = editing
+        ? `Saved changes to "${item.name}".`
+        : `Added "${item.name}"${
+            urls.length ? ` with ${urls.length} photo${urls.length === 1 ? "" : "s"}` : ""
+          }.`;
+      router.refresh();
+      if (onDone) {
+        onDone(message);
+        return;
+      }
+      setDone(message);
       // Keep the branch and brand: the next product is often from the same set.
       setF({ ...EMPTY, kind: f.kind, company: f.company });
+      setKept([]);
       setPhotos([]);
-      router.refresh();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -247,18 +376,30 @@ export function CatalogQuickAdd() {
   };
 
   const functional = f.kind === "functional";
+  const heading =
+    mode === "edit" ? "Edit product" : mode === "duplicate" ? "Duplicate product" : "Add a product";
 
   return (
     <section className="space-y-4">
       <div>
-        <Eyebrow>Add a product</Eyebrow>
+        <Eyebrow>{heading}</Eyebrow>
         <p className="text-sm text-muted">
-          One product at a time. Take photos with the phone camera or pick them from the
-          gallery. Only the name is required.
+          {mode === "edit"
+            ? "Change any detail or photo. Quotations already made keep their prices."
+            : mode === "duplicate"
+              ? "A new product, filled in from the one you copied. Change what differs, such as the size or finish, then save."
+              : "One product at a time. Take photos with the phone camera or pick them from the gallery. Only the name is required."}
         </p>
       </div>
 
-      <div className="flex overflow-hidden rounded-md border border-hairline text-sm font-medium">
+      {/* An existing product keeps its branch. */}
+      <div
+        aria-disabled={mode === "edit"}
+        className={cx(
+          "flex overflow-hidden rounded-md border border-hairline text-sm font-medium",
+          mode === "edit" && "pointer-events-none opacity-60",
+        )}
+      >
         {(["functional", "decorative"] as const).map((k) => (
           <button
             key={k}
@@ -411,9 +552,23 @@ export function CatalogQuickAdd() {
 
       <div className="space-y-2">
         <span className="text-xs text-muted">
-          Photos ({photos.length}/{MAX_PHOTOS})
+          Photos ({photoCount}/{MAX_PHOTOS})
         </span>
         <div className="flex flex-wrap gap-2">
+          {kept.map((file) => (
+            <div key={file} className="relative h-20 w-20 overflow-hidden rounded-md border border-hairline bg-panel">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={catalogImageUrl(file)} alt="" className="h-full w-full object-contain" />
+              <button
+                type="button"
+                aria-label="Remove photo"
+                onClick={() => setKept((prev) => prev.filter((x) => x !== file))}
+                className="absolute right-0.5 top-0.5 grid h-6 w-6 place-items-center rounded-full bg-ink-deep/80 text-xs text-paper"
+              >
+                ×
+              </button>
+            </div>
+          ))}
           {previews.map((src, i) => (
             <div key={src} className="relative h-20 w-20 overflow-hidden rounded-md border border-hairline bg-panel">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -428,7 +583,7 @@ export function CatalogQuickAdd() {
               </button>
             </div>
           ))}
-          {photos.length < MAX_PHOTOS && (
+          {photoCount < MAX_PHOTOS && (
             <>
               <button
                 type="button"
@@ -480,19 +635,26 @@ export function CatalogQuickAdd() {
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <Button onClick={save} disabled={busy} className="sm:min-w-48">
-          {busy ? "Saving…" : "Add product"}
+          {busy ? "Saving…" : mode === "edit" ? "Save changes" : "Add product"}
         </Button>
-        <Button
-          variant="ghost"
-          disabled={busy}
-          onClick={() => {
-            setF({ ...EMPTY, kind: f.kind });
-            setPhotos([]);
-            setError(null);
-          }}
-        >
-          Clear
-        </Button>
+        {onCancel ? (
+          <Button variant="ghost" disabled={busy} onClick={onCancel}>
+            Cancel
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            disabled={busy}
+            onClick={() => {
+              setF({ ...EMPTY, kind: f.kind });
+              setKept([]);
+              setPhotos([]);
+              setError(null);
+            }}
+          >
+            Clear
+          </Button>
+        )}
       </div>
     </section>
   );

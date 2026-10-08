@@ -81,7 +81,9 @@ export default function SendPage() {
           client,
           validUntil: untilYmd,
           warranty: draft.warranty,
+          leadTime: draft.leadTime,
           editOf: editing,
+          shareKey: draft.shareKey,
           blueprintSaveDataUrl: keep,
           blueprintMeta: bp
             ? { kind: bp.kind, width: bp.width, height: bp.height, pageCount: bp.pageCount }

@@ -10,7 +10,7 @@ import { LightingFilterPicker, type LinePick } from "@/components/lighting-filte
 import { OptionCountControl } from "@/components/option-count";
 import { RoomNavigator } from "@/components/room-navigator";
 import { ButtonLink, Eyebrow } from "@/components/ui";
-import { UNIT_LABEL, getSystem, systemImages, unitPriceFor, variantLabel } from "@/lib/catalog";
+import { UNIT_LABEL, catalogPriceFor, getSystem, systemImages, unitPriceFor, variantLabel } from "@/lib/catalog";
 import { useDraft } from "@/lib/draft/context";
 import { money } from "@/lib/format";
 import { computeRoom, optionLabel, type ComputedLine, type ComputedRoom } from "@/lib/quote";
@@ -84,12 +84,12 @@ function RowThumb({ systemId }: { systemId: string }) {
 export default function RoomLightingPage() {
   const { roomId } = useParams<{ roomId: string }>();
   const router = useRouter();
-  const { loaded, draft, setRoomLines, setRoomDiscount, setOptionCount } = useDraft();
+  const { loaded, draft, setRoomLines, setRoomDiscount, setOptionCount, addRoom } = useDraft();
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [activeLineId, setActiveLineId] = useState<string | null>(lineFromHash);
   const [activeOpt, setActiveOpt] = useState(0);
-  // Below xl the blueprint sits above the lights; it starts open.
-  const [showBlueprint, setShowBlueprint] = useState(true);
+  // The blueprint opens only when asked for, to leave room for the lights.
+  const [showBlueprint, setShowBlueprint] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   // Which option of the active light is being re-picked from "Same as Option 1".
   const [pickingAlt, setPickingAlt] = useState(false);
@@ -153,6 +153,7 @@ export default function RoomLightingPage() {
   );
   const computed = perOption[opt];
   const isLast = index === rooms.length - 1;
+  const bpOn = !!draft.blueprint && showBlueprint;
   const previewSys = previewId ? getSystem(previewId) : undefined;
   const activeLine = lines.find((l) => l.id === activeLineId);
 
@@ -327,8 +328,10 @@ export default function RoomLightingPage() {
     const choice = choiceFor(line, opt);
     const sys = getSystem(choice.systemId);
     const unit = sys ? unitPriceFor(sys, choice) : 0;
-    const needsRate =
-      !!sys && sys.unitCost <= 0 && unitPriceFor(sys, { ...choice, unitPrice: 0 }) <= 0;
+    const listPrice = sys ? catalogPriceFor(sys, choice) : 0;
+    const needsRate = !!sys && listPrice <= 0;
+    // A typed rate on a priced light is special pricing for this quotation.
+    const repriced = !!sys && listPrice > 0 && !!choice.unitPrice && choice.unitPrice !== listPrice;
     const lineCalc = lineTotals[opt].get(line.id);
     const first = getSystem(line.systemId);
     const alt = opt > 0 ? line.alts?.[opt - 1] : undefined;
@@ -485,7 +488,7 @@ export default function RoomLightingPage() {
               />
               {sys && <span className="text-faint">{UNIT_LABEL[sys.unit]}</span>}
             </label>
-            {needsRate && (
+            {sys && (
               <label className="flex items-center gap-2 text-xs text-muted">
                 Rate ₹
                 <input
@@ -493,16 +496,31 @@ export default function RoomLightingPage() {
                   min={0}
                   step={1}
                   value={choice.unitPrice || ""}
-                  placeholder="Enter"
+                  placeholder={listPrice > 0 ? String(listPrice) : "Enter"}
+                  aria-label={`Rate per ${UNIT_LABEL[sys.unit]}`}
                   onChange={(e) => {
                     const v = parseFloat(e.target.value);
-                    setChoiceRate(line.id, opt, Number.isFinite(v) ? Math.max(0, v) : undefined);
+                    setChoiceRate(line.id, opt, Number.isFinite(v) && v > 0 ? v : undefined);
                   }}
                   className={cx(
                     "w-24 rounded-md border bg-paper px-2 py-1 text-sm text-ink outline-none focus:border-gold",
-                    choice.unitPrice ? "border-hairline" : "border-gold/60",
+                    needsRate && !choice.unitPrice
+                      ? "border-gold/60"
+                      : repriced
+                        ? "border-gold"
+                        : "border-hairline",
                   )}
                 />
+                {repriced && (
+                  <button
+                    type="button"
+                    onClick={() => setChoiceRate(line.id, opt, undefined)}
+                    title={`Back to the catalogue price, ${money(listPrice)}`}
+                    className="text-[11px] font-medium text-gold-deep hover:underline"
+                  >
+                    Reset
+                  </button>
+                )}
               </label>
             )}
             {(sys || first) && (
@@ -527,11 +545,16 @@ export default function RoomLightingPage() {
             No catalogue price for this item. Enter the rate to include it.
           </p>
         )}
+        {repriced && (
+          <p className="-mt-1 text-[11px] text-faint">
+            Special price for this quotation. Catalogue price {money(listPrice)}.
+          </p>
+        )}
 
         {/* Photo + specs right on the light: always when the blueprint takes the
             wide column, otherwise only below xl (the side column has them). */}
         {(previewSys || sys) && (
-          <div className={draft.blueprint ? undefined : "xl:hidden"}>
+          <div className={bpOn ? undefined : "xl:hidden"}>
             {previewSys ? (
               <LightDetails
                 key={`preview-${previewSys.id}`}
@@ -565,6 +588,10 @@ export default function RoomLightingPage() {
       activeLineId={activeLineId}
       onSelectLine={jumpTo}
       onAddLine={addLine}
+      onAddRoom={(name) => {
+        const id = addRoom(name);
+        if (id) router.push(`/new/rooms/${id}`);
+      }}
     />
   );
 
@@ -589,7 +616,7 @@ export default function RoomLightingPage() {
       <div
         className={cx(
           "grid min-w-0 gap-5 lg:grid-cols-[240px_minmax(0,1fr)]",
-          draft.blueprint
+          bpOn
             ? "xl:grid-cols-[240px_minmax(0,1fr)_minmax(0,460px)]"
             : "xl:grid-cols-[260px_minmax(0,1fr)_380px]",
         )}
@@ -600,10 +627,10 @@ export default function RoomLightingPage() {
           <div className="mt-2">{navigator}</div>
         </aside>
 
-        {/* Centre (xl): the blueprint, always in view */}
-        {draft.blueprint && (
+        {/* Centre (xl): the blueprint, while it is open */}
+        {bpOn && (
           <div className="hidden min-w-0 xl:sticky xl:top-24 xl:block xl:h-[calc(100dvh-8rem)]">
-            <BlueprintViewer src={draft.blueprint.previewDataUrl} className="h-full w-full" />
+            <BlueprintViewer src={draft.blueprint!.previewDataUrl} className="h-full w-full" />
           </div>
         )}
 
@@ -632,7 +659,7 @@ export default function RoomLightingPage() {
 
           {/* Room header */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <div className="min-w-0 flex-1 basis-full sm:basis-0">
+            <div className={cx("min-w-0 flex-1 basis-full sm:basis-0", bpOn && "xl:basis-full")}>
               <p className="text-xs text-faint">
                 Room {index + 1} of {rooms.length}
               </p>
@@ -640,6 +667,25 @@ export default function RoomLightingPage() {
                 {room.name}
               </h2>
             </div>
+            {draft.blueprint && (
+              <button
+                type="button"
+                onClick={() => setShowBlueprint((v) => !v)}
+                aria-pressed={showBlueprint}
+                className={cx(
+                  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium",
+                  showBlueprint
+                    ? "border-gold bg-gold-tint text-ink-deep"
+                    : "border-hairline text-muted hover:border-gold hover:text-ink",
+                )}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <rect x="3.5" y="3.5" width="17" height="17" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
+                  <path d="M3.5 12h8m0-8.5V20.5M11.5 16h9" stroke="currentColor" strokeWidth="1.6" />
+                </svg>
+                {showBlueprint ? "Hide blueprint" : "Blueprint"}
+              </button>
+            )}
             <OptionCountControl
               value={optionCount}
               onChange={(n) => {
@@ -675,21 +721,10 @@ export default function RoomLightingPage() {
             </p>
           )}
 
-          {/* Blueprint, below xl (the side column holds it on wide screens) */}
-          {draft.blueprint && (
-            <div className="xl:hidden">
-              <button
-                type="button"
-                onClick={() => setShowBlueprint((v) => !v)}
-                className="text-xs font-medium text-gold-deep hover:underline"
-              >
-                {showBlueprint ? "Hide blueprint" : "Show blueprint"}
-              </button>
-              {showBlueprint && (
-                <div className="mt-2 h-[45vh] min-h-64">
-                  <BlueprintViewer src={draft.blueprint.previewDataUrl} className="h-full w-full" />
-                </div>
-              )}
+          {/* Blueprint, below xl, when open (the side column holds it on wide screens) */}
+          {bpOn && (
+            <div className="h-[45vh] min-h-64 xl:hidden">
+              <BlueprintViewer src={draft.blueprint!.previewDataUrl} className="h-full w-full" />
             </div>
           )}
 
@@ -825,8 +860,8 @@ export default function RoomLightingPage() {
           </div>
         </div>
 
-        {/* Right (xl, no blueprint): photos + specs of the selected light */}
-        {!draft.blueprint && (
+        {/* Right (xl, blueprint closed): photos + specs of the selected light */}
+        {!bpOn && (
           <aside className="hidden min-w-0 xl:sticky xl:top-24 xl:block xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto xl:pr-1">
             <div className="mb-3">
               <Eyebrow>Photos &amp; specs</Eyebrow>

@@ -621,12 +621,17 @@ function RangeFields({ value, onChange }: { value: RangePicks; onChange: (r: Ran
 /* ----------------------------------- Results ----------------------------------- */
 
 /** Small product photo in the match list (hover preview does not exist on touch screens). */
-function Thumb({ id }: { id: string }) {
+function Thumb({ id, small }: { id: string; small?: boolean }) {
   const sys = getSystem(id);
   const src = sys ? systemImages(sys)[0] : undefined;
   const [failed, setFailed] = useState(false);
   return (
-    <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded border border-hairline bg-paper">
+    <span
+      className={cx(
+        "grid shrink-0 place-items-center overflow-hidden rounded border border-hairline bg-paper",
+        small ? "h-9 w-9" : "h-12 w-12",
+      )}
+    >
       {src && !failed ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -643,6 +648,7 @@ function Thumb({ id }: { id: string }) {
 }
 
 const MAX_RESULTS = 300;
+const MAX_POPULAR_CHIPS = 12;
 
 function ResultList<T extends LightingSystem>({
   candidates: unfiltered,
@@ -662,9 +668,17 @@ function ResultList<T extends LightingSystem>({
   heading?: string;
 }) {
   // priceFor only changes along with the candidate list (new filter picks).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const candidates = useMemo(() => filterByRange(unfiltered, range, priceFor), [unfiltered, range]);
+  // Popular products come first; the rest keep their order (stable sort).
+  const candidates = useMemo(
+    () =>
+      [...filterByRange(unfiltered, range, priceFor)].sort(
+        (a, b) => Number(!!b.popular) - Number(!!a.popular),
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [unfiltered, range],
+  );
   const shown = candidates.slice(0, MAX_RESULTS);
+  const popular = candidates.filter((s) => s.popular).slice(0, MAX_POPULAR_CHIPS);
   const fine = useFinePointer();
   const listRef = useRef<HTMLUListElement>(null);
   // Highlighted row; it belongs to one list of candidates, so new filters or a
@@ -703,6 +717,38 @@ function ResultList<T extends LightingSystem>({
         </span>
         {fine && shown.length > 0 && <span>Click to highlight · ↑ ↓ to move · Enter to select</span>}
       </p>
+      {/* Common choices, one tap away. */}
+      {popular.length > 0 && (
+        <div className="mb-2">
+          <p className="pb-1 text-[11px] font-medium uppercase tracking-wide text-gold-deep">
+            Popular choices
+          </p>
+          <div className="flex gap-1.5 overflow-x-auto pb-1">
+            {popular.map((s) => {
+              const price = priceFor(s);
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => onPick(s.id)}
+                  onMouseEnter={() => onPreview?.(s.id)}
+                  onMouseLeave={() => onPreview?.(null)}
+                  title={`${s.name}${s.sourceCode ? ` · ${s.sourceCode}` : ""}`}
+                  className="flex w-36 shrink-0 items-center gap-1.5 rounded-md border border-gold/50 bg-gold-tint/40 p-1 text-left hover:border-gold hover:bg-gold-tint"
+                >
+                  <Thumb id={s.id} small />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[11px] text-ink">{s.name}</span>
+                    <span className="block truncate text-[10px] tabular-nums text-faint">
+                      {price > 0 ? money(price) : "No price"}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {candidates.length === 0 ? (
         <p className="py-2 text-center text-xs text-faint">No lights match.</p>
       ) : (
@@ -741,7 +787,14 @@ function ResultList<T extends LightingSystem>({
                 >
                   <Thumb id={s.id} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-ink">{s.name}</span>
+                    <span className="block truncate text-ink">
+                      {s.popular && (
+                        <span className="mr-1 rounded-full bg-gold px-1.5 py-px align-[1px] text-[9px] font-medium uppercase tracking-wide text-paper">
+                          Popular
+                        </span>
+                      )}
+                      {s.name}
+                    </span>
                     <span className="block truncate text-[11px] text-faint">
                       {[s.sourceCode, s.size].filter(Boolean).join(" · ")}
                     </span>
