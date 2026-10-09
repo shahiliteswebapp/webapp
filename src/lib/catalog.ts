@@ -2,6 +2,8 @@
  * Real lighting catalog, imported from the client's source documents:
  *   - functional fixtures: rawdata/ECO 25-26 (V 1.5).pdf, rawdata/Architectural Product list -Dec'25.pdf
  *   - decorative fixtures: rawdata/Geo Liting Hanging & Celliling Light Part 1.pdf, rawdata/Geo Liting Mix 1 Updated.pdf
+ *   - Crescent price list (MRP): rawdata/Crescent Gen PL RLP V25 2026-1.pdf (scripts/parse-crescent.py)
+ *   - Arya Majestic price list (dealer price): rawdata/GOVINDAM.pdf (scripts/add-arya.py)
  * Parsed once into catalog-data.json (see scripts used at import time — not part of the app).
  *
  * Decorative items (Geo Liting) are priced from the grey number after the SKU (listNumber / 10,

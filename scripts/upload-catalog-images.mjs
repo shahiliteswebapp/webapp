@@ -5,6 +5,7 @@
  *   2. python scripts/parse-geo-catalogs.py       (Part 1 / Mix 1 items + photos)
  *   3. python scripts/merge-decorative.py         (Part 2 rows + client chart tags)
  *   4. python scripts/add-architectural-missing.py (price-list rows the first import skipped)
+ *   4b. python scripts/parse-crescent.py, python scripts/add-arya.py (Crescent + Arya price lists)
  *   5. python scripts/parse-functional-images.py  (ECO / Architectural photos)
  *   6. npx wrangler login                          (once per machine)
  *   7. node scripts/upload-catalog-images.mjs [dir]
