@@ -42,15 +42,76 @@ import {
 import { money } from "@/lib/format";
 import { cx } from "@/lib/cx";
 
-const selectClass =
-  "min-w-0 flex-1 rounded-md border border-hairline bg-paper px-2 py-1.5 text-sm outline-none focus:border-gold";
-
-function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
+/*
+ * One row of tap-to-choose pills. Tapping the chosen pill again clears it
+ * ("Any"). Each pill shows how many lights it would leave; pills that would
+ * leave none are dimmed.
+ */
+function ChipRow<V extends string | number>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: V | undefined;
+  options: { value: V; label: string; count?: number }[];
+  onChange: (v: V | undefined) => void;
+}) {
   return (
-    <label className="flex items-center gap-2">
-      <span className="w-16 shrink-0 text-xs text-muted">{label}</span>
+    <div className="flex items-start gap-2">
+      <span className="w-16 shrink-0 pt-1.5 text-xs text-muted">{label}</span>
+      <div role="radiogroup" aria-label={label} className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+        <Chip on={value === undefined} onClick={() => onChange(undefined)}>
+          Any
+        </Chip>
+        {options.map((o) => (
+          <Chip
+            key={String(o.value)}
+            on={value === o.value}
+            dim={o.count === 0 && value !== o.value}
+            onClick={() => onChange(value === o.value ? undefined : o.value)}
+          >
+            {o.label}
+            {o.count !== undefined && (
+              <span className={cx("ml-1 tabular-nums", value === o.value ? "text-paper/80" : "text-faint")}>
+                {o.count}
+              </span>
+            )}
+          </Chip>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Chip({
+  on,
+  dim,
+  onClick,
+  children,
+}: {
+  on: boolean;
+  dim?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={on}
+      onClick={onClick}
+      className={cx(
+        "rounded-full border px-2.5 py-1 text-xs transition-colors pointer-coarse:px-3 pointer-coarse:py-1.5",
+        on
+          ? "border-gold bg-gold font-medium text-paper"
+          : "border-hairline bg-paper text-ink hover:border-gold hover:bg-gold-tint/60",
+        dim && "opacity-45",
+      )}
+    >
       {children}
-    </label>
+    </button>
   );
 }
 
@@ -59,9 +120,8 @@ function capitalize(s: string): string {
 }
 
 /*
- * Laptops (mouse / trackpad): a click highlights a light, the arrow keys move
- * the highlight inside the list, and Select / Enter / double-click picks it.
- * Phones and tablets: scroll the list and tap a light to pick it.
+ * One click (or tap) on a light picks it. On laptops, hovering previews it in
+ * the side panel, and the arrow keys + Enter work while the list has focus.
  */
 const FINE_POINTER = "(hover: hover) and (pointer: fine)";
 
@@ -311,8 +371,17 @@ function FunctionalFlow({
   const set = <K extends keyof FunctionalPicks>(key: K, val: FunctionalPicks[K] | undefined) =>
     setPicks((prev) => ({ ...prev, [key]: val }));
 
-  const controls = picks.automatic ? availableControls(candidates) : [];
-  const interfaces = picks.automatic ? availableInterfaces(candidates, picks.control) : [];
+  // Choices come from the pool without that row's own pick, so picking one
+  // pill keeps its siblings on screen for a quick switch.
+  const controls = picks.automatic
+    ? availableControls(filterFunctional(LIGHTING_SYSTEMS, { ...picks, control: undefined, interfaceTag: undefined }))
+    : [];
+  const interfaces = picks.automatic
+    ? availableInterfaces(
+        filterFunctional(LIGHTING_SYSTEMS, { ...picks, interfaceTag: undefined }),
+        picks.control,
+      )
+    : [];
   // Size / finish / cutout / watt are not filters: they show as specs under
   // the product photo (light-details.tsx).
 
@@ -320,96 +389,69 @@ function FunctionalFlow({
     ? { interfaceTag: picks.interfaceTag, control: picks.control }
     : {};
 
+  // How many lights each pill would leave, given every other pick.
+  const countF = (p: Partial<FunctionalPicks>) =>
+    filterFunctional(LIGHTING_SYSTEMS, { ...picks, ...p }).length;
+
   return (
     <div className="space-y-2">
-      <FieldRow label="Layer">
-        <select
-          className={selectClass}
-          value={picks.layer ?? ""}
-          onChange={(e) =>
-            set("layer", e.target.value ? (Number(e.target.value) as FunctionalPicks["layer"]) : undefined)
-          }
-        >
-          <option value="">Any</option>
-          {LAYER_OPTIONS.map((l) => (
-            <option key={l} value={l}>
-              {l}. {LAYER_LABEL[l]}
-            </option>
-          ))}
-        </select>
-      </FieldRow>
+      <ChipRow
+        label="Layer"
+        value={picks.layer}
+        options={LAYER_OPTIONS.map((l) => ({
+          value: l,
+          label: LAYER_LABEL[l],
+          count: countF({ layer: l }),
+        }))}
+        onChange={(v) => set("layer", v)}
+      />
 
-      <FieldRow label="Glare">
-        <select
-          className={selectClass}
-          value={picks.glare ?? ""}
-          onChange={(e) => set("glare", (e.target.value || undefined) as FunctionalPicks["glare"])}
-        >
-          <option value="">Not specified</option>
-          <option value="no-glare">No glare</option>
-          <option value="some-glare">Some glare acceptable</option>
-        </select>
-      </FieldRow>
+      <ChipRow
+        label="Glare"
+        value={picks.glare}
+        options={[
+          { value: "no-glare" as const, label: "No glare" },
+          { value: "some-glare" as const, label: "Some glare OK" },
+        ]}
+        onChange={(v) => set("glare", v)}
+      />
 
-      <FieldRow label="Automated">
-        <select
-          className={selectClass}
-          value={picks.automatic === undefined ? "" : picks.automatic ? "yes" : "no"}
-          onChange={(e) => {
-            const v = e.target.value;
-            setPicks((prev) => ({
-              ...prev,
-              automatic: v === "" ? undefined : v === "yes",
-              control: undefined,
-              interfaceTag: undefined,
-            }));
-          }}
-        >
-          <option value="">Any</option>
-          <option value="yes">Automated</option>
-          <option value="no">Non-automated</option>
-        </select>
-      </FieldRow>
+      <ChipRow
+        label="Automated"
+        value={picks.automatic === undefined ? undefined : picks.automatic ? "yes" : "no"}
+        options={[
+          { value: "yes" as const, label: "Automated", count: countF({ automatic: true, control: undefined, interfaceTag: undefined }) },
+          { value: "no" as const, label: "Non-automated", count: countF({ automatic: false, control: undefined, interfaceTag: undefined }) },
+        ]}
+        onChange={(v) =>
+          setPicks((prev) => ({
+            ...prev,
+            automatic: v === undefined ? undefined : v === "yes",
+            control: undefined,
+            interfaceTag: undefined,
+          }))
+        }
+      />
 
       {picks.automatic && (
         <>
-          <FieldRow label="Control">
-            <select
-              className={selectClass}
-              value={picks.control ?? ""}
-              onChange={(e) =>
-                setPicks((prev) => ({
-                  ...prev,
-                  control: (e.target.value || undefined) as FunctionalPicks["control"],
-                  interfaceTag: undefined,
-                }))
-              }
-            >
-              <option value="">Any</option>
-              {controls.map((c) => (
-                <option key={c} value={c}>
-                  {c === "dimmable" ? "Dimmable" : "Dimmable + Tunable"}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
+          <ChipRow
+            label="Control"
+            value={picks.control}
+            options={controls.map((c) => ({
+              value: c,
+              label: c === "dimmable" ? "Dimmable" : "Dimmable + Tunable",
+              count: countF({ control: c, interfaceTag: undefined }),
+            }))}
+            onChange={(v) => setPicks((prev) => ({ ...prev, control: v, interfaceTag: undefined }))}
+          />
 
-          <FieldRow label="Interface">
-            <select
-              className={selectClass}
-              value={picks.interfaceTag ?? ""}
-              onChange={(e) =>
-                set("interfaceTag", (e.target.value || undefined) as FunctionalPicks["interfaceTag"])
-              }
-            >
-              <option value="">Any</option>
-              {interfaces.map((i) => (
-                <option key={i} value={i}>
-                  {i}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
+          <ChipRow
+            label="Interface"
+            value={picks.interfaceTag}
+            options={interfaces.map((i) => ({ value: i, label: i, count: countF({ interfaceTag: i }) }))}
+            onChange={(v) => set("interfaceTag", v)}
+          />
         </>
       )}
 
@@ -445,75 +487,63 @@ function DecorativeFlow({
   const set = <K extends keyof DecorativePicks>(key: K, val: DecorativePicks[K] | undefined) =>
     setPicks((prev) => ({ ...prev, [key]: val }));
 
-  const mountings = decorativeTagOptions(candidates, "mountingTags");
-  const styles = decorativeTagOptions(candidates, "styleTags");
+  const mountings = decorativeTagOptions(
+    filterDecorative(LIGHTING_SYSTEMS, { ...picks, mounting: undefined }),
+    "mountingTags",
+  );
+  const styles = decorativeTagOptions(
+    filterDecorative(LIGHTING_SYSTEMS, { ...picks, style: undefined }),
+    "styleTags",
+  );
   const showIndoorOutdoor = picks.decorType === "Wall light";
+
+  // Counts against the whole decorative pool, so every type stays visible.
+  const countD = (p: Partial<DecorativePicks>) =>
+    filterDecorative(LIGHTING_SYSTEMS, { ...picks, ...p }).length;
 
   return (
     <div className="space-y-2">
-      <FieldRow label="Type">
-        <select
-          className={selectClass}
-          value={picks.decorType ?? ""}
-          onChange={(e) => {
-            const v = e.target.value || undefined;
-            setPicks((prev) => ({
-              ...prev,
-              decorType: v,
-              mounting: undefined,
-              indoorOutdoor: undefined,
-            }));
-          }}
-        >
-          <option value="">Any</option>
-          {DECOR_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-      </FieldRow>
+      <ChipRow
+        label="Type"
+        value={picks.decorType}
+        options={DECOR_TYPES.map((t) => ({
+          value: t as string,
+          label: t,
+          count: countD({ decorType: t, mounting: undefined, indoorOutdoor: undefined }),
+        }))}
+        onChange={(v) =>
+          setPicks((prev) => ({ ...prev, decorType: v, mounting: undefined, indoorOutdoor: undefined }))
+        }
+      />
 
       {showIndoorOutdoor && (
-        <FieldRow label="Location">
-          <select
-            className={selectClass}
-            value={picks.indoorOutdoor ?? ""}
-            onChange={(e) =>
-              set("indoorOutdoor", (e.target.value || undefined) as DecorativePicks["indoorOutdoor"])
-            }
-          >
-            <option value="">Any</option>
-            <option value="indoor">Indoor</option>
-            <option value="outdoor">Outdoor</option>
-          </select>
-        </FieldRow>
+        <ChipRow
+          label="Location"
+          value={picks.indoorOutdoor}
+          options={[
+            { value: "indoor" as const, label: "Indoor", count: countD({ indoorOutdoor: "indoor" }) },
+            { value: "outdoor" as const, label: "Outdoor", count: countD({ indoorOutdoor: "outdoor" }) },
+          ]}
+          onChange={(v) => set("indoorOutdoor", v)}
+        />
       )}
 
       {(mountings.length > 0 || picks.mounting) && (
-        <FieldRow label="Mounting">
-          <select className={selectClass} value={picks.mounting ?? ""} onChange={(e) => set("mounting", e.target.value || undefined)}>
-            <option value="">Any</option>
-            {mountings.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        </FieldRow>
+        <ChipRow
+          label="Mounting"
+          value={picks.mounting}
+          options={mountings.map((m) => ({ value: m, label: m, count: countD({ mounting: m }) }))}
+          onChange={(v) => set("mounting", v)}
+        />
       )}
 
       {(styles.length > 0 || picks.style) && (
-        <FieldRow label="Style">
-          <select className={selectClass} value={picks.style ?? ""} onChange={(e) => set("style", e.target.value || undefined)}>
-            <option value="">Any</option>
-            {styles.map((s) => (
-              <option key={s} value={s}>
-                {capitalize(s)}
-              </option>
-            ))}
-          </select>
-        </FieldRow>
+        <ChipRow
+          label="Style"
+          value={picks.style}
+          options={styles.map((st) => ({ value: st, label: capitalize(st), count: countD({ style: st }) }))}
+          onChange={(v) => set("style", v)}
+        />
       )}
 
       {candidates.some((c) => c.unitCost === 0) && (
@@ -715,7 +745,7 @@ function ResultList<T extends LightingSystem>({
           {heading} ({candidates.length}
           {candidates.length !== total ? ` of ${total}` : ""})
         </span>
-        {fine && shown.length > 0 && <span>Click to highlight · ↑ ↓ to move · Enter to select</span>}
+        {fine && shown.length > 0 && <span>Click a light to pick it · ↑ ↓ + Enter also work</span>}
       </p>
       {/* Common choices, one tap away. */}
       {popular.length > 0 && (
@@ -774,15 +804,10 @@ function ResultList<T extends LightingSystem>({
                   role="option"
                   aria-selected={on}
                   onMouseEnter={() => onPreview?.(s.id)}
-                  onClick={() => {
-                    if (!fine) return onPick(s.id); // touch: tap selects
-                    highlight(i);
-                    listRef.current?.focus({ preventScroll: true });
-                  }}
-                  onDoubleClick={() => fine && onPick(s.id)}
+                  onClick={() => onPick(s.id)}
                   className={cx(
-                    "flex cursor-pointer select-none items-center justify-between gap-2 px-2 py-1.5 text-left text-xs",
-                    on ? "bg-gold-tint ring-1 ring-inset ring-gold" : "hover:bg-panel",
+                    "group flex cursor-pointer select-none items-center justify-between gap-2 px-2 py-1.5 text-left text-xs",
+                    on ? "bg-gold-tint ring-1 ring-inset ring-gold" : "hover:bg-gold-tint/50",
                   )}
                 >
                   <Thumb id={s.id} />
@@ -802,19 +827,16 @@ function ResultList<T extends LightingSystem>({
                   <span className="shrink-0 tabular-nums text-faint">
                     {price > 0 ? money(price) : "No price"}
                   </span>
-                  {fine && on && (
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onPick(s.id);
-                      }}
-                      className="shrink-0 rounded-full bg-gold px-3 py-1 text-[11px] font-medium text-paper hover:opacity-90"
-                    >
-                      Select
-                    </button>
-                  )}
+                  <span
+                    aria-hidden
+                    className={cx(
+                      "shrink-0 rounded-full border border-gold px-2.5 py-0.5 text-[11px] font-medium text-gold-deep transition-opacity",
+                      on ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                      !fine && "hidden",
+                    )}
+                  >
+                    Pick
+                  </span>
                 </li>
               );
             })}
