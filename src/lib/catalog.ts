@@ -4,6 +4,11 @@
  *   - decorative fixtures: rawdata/Geo Liting Hanging & Celliling Light Part 1.pdf, rawdata/Geo Liting Mix 1 Updated.pdf
  *   - Crescent price list (MRP): rawdata/Crescent Gen PL RLP V25 2026-1.pdf (scripts/parse-crescent.py)
  *   - Arya Majestic price list (dealer price): rawdata/GOVINDAM.pdf (scripts/add-arya.py)
+ *   - ALS dealer price list + catalogue photos: rawdata/Dealer Price List_Mar 26_ALS_tbu.pdf (scripts/parse-als.py)
+ *   - Lighting Inspiration Books (chandeliers, wall, mirror; no price): rawdata/*DT=10-08-2025_tbu.pdf
+ *     (scripts/parse-inspiration-books.py)
+ *   - Encapsuled IP67 profiles (no price): scripts/parse-encapsuled.py; Lampzon outdoor (no price,
+ *     typed in from the scan): scripts/add-lampzon.py; Crescent Quick View photos: scripts/add-crescent-quickview.py
  * Parsed once into catalog-data.json (see scripts used at import time — not part of the app).
  *
  * Decorative items (Geo Liting) are priced from the grey number after the SKU (listNumber / 10,
