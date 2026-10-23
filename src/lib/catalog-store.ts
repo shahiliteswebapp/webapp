@@ -54,6 +54,22 @@ function objectUrl(key: string): string {
   return `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${BUCKET}/${encodeURIComponent(key)}`;
 }
 
+/**
+ * PUT one object. aws4fetch's own fetch() hands a Request to fetch, and
+ * Next.js's patched fetch rebuilds a Request from its body stream, so the
+ * upload goes out chunked with no Content-Length and R2 rejects it (411).
+ * Sign here, then send the raw bytes so fetch sets Content-Length itself.
+ */
+async function r2Put(key: string, body: string | Uint8Array, headers: Record<string, string>) {
+  const signed = await client().sign(objectUrl(key), { method: "PUT", body, headers });
+  return fetch(signed.url, {
+    method: "PUT",
+    headers: signed.headers,
+    body: body as BodyInit,
+    cache: "no-store",
+  });
+}
+
 /** Store one (already webp-converted) photo; returns the URL to save on the item. */
 export async function putCatalogImage(bytes: Uint8Array, contentType: string): Promise<string> {
   const ext = contentType === "image/webp" ? "webp" : contentType === "image/png" ? "png" : "jpg";
@@ -61,13 +77,9 @@ export async function putCatalogImage(bytes: Uint8Array, contentType: string): P
   const name = `up-${hash}.${ext}`;
 
   if (r2Configured()) {
-    const res = await client().fetch(objectUrl(name), {
-      method: "PUT",
-      body: new Blob([bytes as Uint8Array<ArrayBuffer>], { type: contentType }),
-      headers: {
-        "content-type": contentType,
-        "cache-control": "public, max-age=31536000, immutable",
-      },
+    const res = await r2Put(name, bytes, {
+      "content-type": contentType,
+      "cache-control": "public, max-age=31536000, immutable",
     });
     if (!res.ok) throw new Error(`R2 upload failed (${res.status}): ${await res.text()}`);
     return `${PUBLIC_BASE}/${name}`;
@@ -143,10 +155,9 @@ async function readState(): Promise<CatalogChanges> {
 async function writeState(state: CatalogChanges): Promise<void> {
   const body = JSON.stringify(state);
   if (r2Configured()) {
-    const res = await client().fetch(objectUrl(LIST_KEY), {
-      method: "PUT",
-      body,
-      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    const res = await r2Put(LIST_KEY, body, {
+      "content-type": "application/json",
+      "cache-control": "no-store",
     });
     if (!res.ok) throw new Error(`R2 write failed (${res.status}): ${await res.text()}`);
   } else {
